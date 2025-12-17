@@ -1,98 +1,187 @@
-import { Image } from 'expo-image';
-import { Platform, StyleSheet } from 'react-native';
+import React from 'react';
+import { 
+  View, 
+  Text, 
+  StyleSheet, 
+  TouchableOpacity, 
+  Image, 
+  ScrollView, 
+  SafeAreaView, 
+  StatusBar 
+} from 'react-native';
+import { useRouter } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
+import Footer from '../Footer';
 
-import { HelloWave } from '@/components/hello-wave';
-import ParallaxScrollView from '@/components/parallax-scroll-view';
-import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
-import { Link } from 'expo-router';
+
+const THEME_COLOR = '#EF6C4D';
+const HEADER_BG = '#000';
 
 export default function HomeScreen() {
-  return (
-    <ParallaxScrollView
-      headerBackgroundColor={{ light: '#A1CEDC', dark: '#1D3D47' }}
-      headerImage={
-        <Image
-          source={require('@/assets/images/partial-react-logo.png')}
-          style={styles.reactLogo}
-        />
-      }>
-      <ThemedView style={styles.titleContainer}>
-        <ThemedText type="title">Welcome!</ThemedText>
-        <HelloWave />
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 1: Try it</ThemedText>
-        <ThemedText>
-          Edit <ThemedText type="defaultSemiBold">app/(tabs)/index.tsx</ThemedText> to see changes.
-          Press{' '}
-          <ThemedText type="defaultSemiBold">
-            {Platform.select({
-              ios: 'cmd + d',
-              android: 'cmd + m',
-              web: 'F12',
-            })}
-          </ThemedText>{' '}
-          to open developer tools.
-        </ThemedText>
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <Link href="/modal">
-          <Link.Trigger>
-            <ThemedText type="subtitle">Step 2: Explore</ThemedText>
-          </Link.Trigger>
-          <Link.Preview />
-          <Link.Menu>
-            <Link.MenuAction title="Action" icon="cube" onPress={() => alert('Action pressed')} />
-            <Link.MenuAction
-              title="Share"
-              icon="square.and.arrow.up"
-              onPress={() => alert('Share pressed')}
-            />
-            <Link.Menu title="More" icon="ellipsis">
-              <Link.MenuAction
-                title="Delete"
-                icon="trash"
-                destructive
-                onPress={() => alert('Delete pressed')}
-              />
-            </Link.Menu>
-          </Link.Menu>
-        </Link>
+  const router = useRouter();
 
-        <ThemedText>
-          {`Tap the Explore tab to learn more about what's included in this starter app.`}
-        </ThemedText>
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 3: Get a fresh start</ThemedText>
-        <ThemedText>
-          {`When you're ready, run `}
-          <ThemedText type="defaultSemiBold">npm run reset-project</ThemedText> to get a fresh{' '}
-          <ThemedText type="defaultSemiBold">app</ThemedText> directory. This will move the current{' '}
-          <ThemedText type="defaultSemiBold">app</ThemedText> to{' '}
-          <ThemedText type="defaultSemiBold">app-example</ThemedText>.
-        </ThemedText>
-      </ThemedView>
-    </ParallaxScrollView>
+  return (
+    <SafeAreaView style={styles.safeArea}>
+      <StatusBar barStyle="light-content" backgroundColor={HEADER_BG} />
+      
+      <ScrollView contentContainerStyle={styles.scrollContent} bounces={false}>
+        
+        <View style={styles.header}>
+            <TouchableOpacity>
+                <Ionicons name="menu" size={28} color="#EF6C4D" />
+            </TouchableOpacity>
+            <Text style={styles.logoText}>
+                <Text style={{color: '#fff'}}>Byte</Text>
+                <Text style={{color: THEME_COLOR}}>bank</Text>
+            </Text>
+        </View>
+
+        <View style={styles.heroSection}>
+           <Text style={styles.heroTitle}>Experimente mais liberdade...</Text>
+           <Image source={{ uri: 'https://cdn-icons-png.flaticon.com/512/7466/7466137.png' }} style={styles.heroImage} resizeMode="contain" />
+           <View style={styles.heroButtonsContainer}>
+              <TouchableOpacity style={styles.btnPrimary} onPress={() => router.push('/signup')}>
+                  <Text style={styles.btnPrimaryText}>Abrir conta</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.btnSecondary} onPress={() => router.push('/login')}>
+                  <Text style={styles.btnSecondaryText}>Já tenho conta</Text>
+              </TouchableOpacity>
+           </View>
+        </View>
+
+        <View style={styles.featuresSection}>
+            <Text style={styles.featuresTitle}>Vantagens do nosso banco:</Text>
+            <View style={styles.featureItem}>
+                <Ionicons name="gift-outline" size={40} color={THEME_COLOR} style={styles.featureIcon} />
+                <Text style={styles.featureName}>Conta e cartão gratuitos</Text>
+                <Text style={styles.featureDesc}>Isso mesmo, nossa conta é digital...</Text>
+            </View>
+            <View style={styles.featureItem}>
+                <Ionicons name="cash-outline" size={40} color={THEME_COLOR} style={styles.featureIcon} />
+                <Text style={styles.featureName}>Saques sem custo</Text>
+                <Text style={styles.featureDesc}>Você pode sacar gratuitamente 4x...</Text>
+            </View>
+            <View style={styles.featureItem}>
+                <Ionicons name="star-outline" size={40} color={THEME_COLOR} style={styles.featureIcon} />
+                <Text style={styles.featureName}>Programa de pontos</Text>
+                <Text style={styles.featureDesc}>Você pode acumular pontos...</Text>
+            </View>
+            <View style={styles.featureItem}>
+                <Ionicons name="shield-checkmark-outline" size={40} color={THEME_COLOR} style={styles.featureIcon} />
+                <Text style={styles.featureName}>Seguro Dispositivos</Text>
+                <Text style={styles.featureDesc}>Seus dispositivos móveis protegidos.</Text>
+            </View>
+        </View>
+
+        <Footer />
+
+      </ScrollView>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  titleContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  stepContainer: {
-    gap: 8,
-    marginBottom: 8,
-  },
-  reactLogo: {
-    height: 178,
-    width: 290,
-    bottom: 0,
-    left: 0,
-    position: 'absolute',
-  },
+    safeArea: {
+        flex: 1,
+        backgroundColor: HEADER_BG,
+    },
+    scrollContent: {
+        flexGrow: 1,
+        backgroundColor: '#fff',
+    },
+    header: {
+        backgroundColor: HEADER_BG,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        paddingHorizontal: 20,
+        paddingVertical: 15,
+    },
+    logoText: {
+        fontSize: 20,
+        fontWeight: 'bold',
+    },
+    heroSection: {
+        backgroundColor: THEME_COLOR, 
+        padding: 24,
+        alignItems: 'center',
+    },
+    heroTitle: {
+        color: '#fff',
+        fontSize: 20,
+        fontWeight: 'bold',
+        textAlign: 'center',
+        marginBottom: 20,
+        lineHeight: 28,
+    },
+    heroImage: {
+        width: '100%',
+        height: 200,
+        marginBottom: 30,
+    },
+    heroButtonsContainer: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        width: '100%',
+        gap: 15,
+    },
+    btnPrimary: {
+        flex: 1,
+        backgroundColor: '#000', 
+        paddingVertical: 14,
+        borderRadius: 8,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    btnPrimaryText: {
+        color: '#fff',
+        fontWeight: 'bold',
+        fontSize: 16,
+    },
+    btnSecondary: {
+        flex: 1,
+        borderWidth: 2,
+        borderColor: '#fff', 
+        paddingVertical: 14,
+        borderRadius: 8,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    btnSecondaryText: {
+        color: '#fff',
+        fontWeight: 'bold',
+        fontSize: 16,
+    },
+    featuresSection: {
+        backgroundColor: '#fff',
+        padding: 24,
+        alignItems: 'center',
+    },
+    featuresTitle: {
+        fontSize: 20,
+        fontWeight: 'bold',
+        color: '#333',
+        marginBottom: 30,
+    },
+    featureItem: {
+        alignItems: 'center',
+        marginBottom: 30,
+        paddingHorizontal: 10,
+    },
+    featureIcon: {
+        marginBottom: 10,
+    },
+    featureName: {
+        fontSize: 18,
+        fontWeight: 'bold',
+        color: THEME_COLOR,
+        marginBottom: 8,
+        textAlign: 'center',
+    },
+    featureDesc: {
+        fontSize: 14,
+        color: '#666',
+        textAlign: 'center',
+        lineHeight: 20,
+    },
 });
