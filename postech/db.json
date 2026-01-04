@@ -1,0 +1,275 @@
+{
+  "transactions": [
+    {
+      "id": "1",
+      "description": "Salário mensal",
+      "amount": 5000.00,
+      "type": "income",
+      "category": "salario",
+      "date": "2024-01-15T10:00:00.000Z",
+      "createdAt": "2024-01-15T10:00:00.000Z"
+    },
+    {
+      "id": "2",
+      "description": "Compra no supermercado",
+      "amount": 350.50,
+      "type": "expense",
+      "category": "alimentacao",
+      "date": "2024-01-16T14:30:00.000Z",
+      "createdAt": "2024-01-16T14:30:00.000Z"
+    },
+    {
+      "id": "3",
+      "description": "Uber para trabalho",
+      "amount": 25.00,
+      "type": "expense",
+      "category": "transporte",
+      "date": "2024-01-17T08:15:00.000Z",
+      "createdAt": "2024-01-17T08:15:00.000Z"
+    },
+    {
+      "id": "4",
+      "description": "Consulta médica",
+      "amount": 200.00,
+      "type": "expense",
+      "category": "saude",
+      "date": "2024-01-18T09:00:00.000Z",
+      "createdAt": "2024-01-18T09:00:00.000Z"
+    },
+    {
+      "id": "5",
+      "description": "Curso online de React Native",
+      "amount": 299.90,
+      "type": "expense",
+      "category": "educacao",
+      "date": "2024-01-19T16:00:00.000Z",
+      "createdAt": "2024-01-19T16:00:00.000Z"
+    },
+    {
+      "id": "6",
+      "description": "Cinema com amigos",
+      "amount": 45.00,
+      "type": "expense",
+      "category": "lazer",
+      "date": "2024-01-20T20:00:00.000Z",
+      "createdAt": "2024-01-20T20:00:00.000Z"
+    },
+    {
+      "id": "7",
+      "description": "Aluguel do apartamento",
+      "amount": 1200.00,
+      "type": "expense",
+      "category": "moradia",
+      "date": "2024-01-21T00:00:00.000Z",
+      "createdAt": "2024-01-21T00:00:00.000Z"
+    },
+    {
+      "id": "8",
+      "description": "Freelance desenvolvimento",
+      "amount": 1500.00,
+      "type": "income",
+      "category": "outros",
+      "date": "2024-01-22T12:00:00.000Z",
+      "createdAt": "2024-01-22T12:00:00.000Z"
+    },
+    {
+      "id": "9",
+      "description": "Restaurante",
+      "amount": 120.00,
+      "type": "expense",
+      "category": "alimentacao",
+      "date": "2024-01-23T19:30:00.000Z",
+      "createdAt": "2024-01-23T19:30:00.000Z"
+    },
+    {
+      "id": "10",
+      "description": "Combustível",
+      "amount": 180.00,
+      "type": "expense",
+      "category": "transporte",
+      "date": "2024-01-24T10:00:00.000Z",
+      "createdAt": "2024-01-24T10:00:00.000Z"
+    },
+    {
+      "id": "11",
+      "description": "Farmácia",
+      "amount": 85.50,
+      "type": "expense",
+      "category": "saude",
+      "date": "2024-01-25T15:00:00.000Z",
+      "createdAt": "2024-01-25T15:00:00.000Z"
+    },
+    {
+      "id": "12",
+      "description": "Livro técnico",
+      "amount": 89.90,
+      "type": "expense",
+      "category": "educacao",
+      "date": "2024-01-26T11:00:00.000Z",
+      "createdAt": "2024-01-26T11:00:00.000Z"
+    },
+    {
+      "id": "13",
+      "description": "Show de música",
+      "amount": 150.00,
+      "type": "expense",
+      "category": "lazer",
+      "date": "2024-01-27T21:00:00.000Z",
+      "createdAt": "2024-01-27T21:00:00.000Z"
+    },
+    {
+      "id": "14",
+      "description": "Conta de luz",
+      "amount": 95.00,
+      "type": "expense",
+      "category": "moradia",
+      "date": "2024-01-28T08:00:00.000Z",
+      "createdAt": "2024-01-28T08:00:00.000Z"
+    },
+    {
+      "id": "15",
+      "description": "Venda de produto",
+      "amount": 450.00,
+      "type": "income",
+      "category": "outros",
+      "date": "2024-01-29T14:00:00.000Z",
+      "createdAt": "2024-01-29T14:00:00.000Z"
+    },
+    {
+      "id": "16",
+      "description": "Mercado semanal",
+      "amount": 280.00,
+      "type": "expense",
+      "category": "alimentacao",
+      "date": "2024-01-30T10:00:00.000Z",
+      "createdAt": "2024-01-30T10:00:00.000Z"
+    },
+    {
+      "id": "17",
+      "description": "Taxi",
+      "amount": 35.00,
+      "type": "expense",
+      "category": "transporte",
+      "date": "2024-02-01T18:00:00.000Z",
+      "createdAt": "2024-02-01T18:00:00.000Z"
+    },
+    {
+      "id": "18",
+      "description": "Plano de saúde",
+      "amount": 350.00,
+      "type": "expense",
+      "category": "saude",
+      "date": "2024-02-02T00:00:00.000Z",
+      "createdAt": "2024-02-02T00:00:00.000Z"
+    },
+    {
+      "id": "19",
+      "description": "Workshop online",
+      "amount": 199.90,
+      "type": "expense",
+      "category": "educacao",
+      "date": "2024-02-03T19:00:00.000Z",
+      "createdAt": "2024-02-03T19:00:00.000Z"
+    },
+    {
+      "id": "20",
+      "description": "Parque de diversões",
+      "amount": 120.00,
+      "type": "expense",
+      "category": "lazer",
+      "date": "2024-02-04T15:00:00.000Z",
+      "createdAt": "2024-02-04T15:00:00.000Z"
+    },
+    {
+      "id": "21",
+      "description": "Condomínio",
+      "amount": 250.00,
+      "type": "expense",
+      "category": "moradia",
+      "date": "2024-02-05T00:00:00.000Z",
+      "createdAt": "2024-02-05T00:00:00.000Z"
+    },
+    {
+      "id": "22",
+      "description": "Bônus anual",
+      "amount": 3000.00,
+      "type": "income",
+      "category": "salario",
+      "date": "2024-02-06T10:00:00.000Z",
+      "createdAt": "2024-02-06T10:00:00.000Z"
+    },
+    {
+      "id": "23",
+      "description": "Delivery",
+      "amount": 55.00,
+      "type": "expense",
+      "category": "alimentacao",
+      "date": "2024-02-07T20:00:00.000Z",
+      "createdAt": "2024-02-07T20:00:00.000Z"
+    },
+    {
+      "id": "24",
+      "description": "Manutenção do carro",
+      "amount": 450.00,
+      "type": "expense",
+      "category": "transporte",
+      "date": "2024-02-08T09:00:00.000Z",
+      "createdAt": "2024-02-08T09:00:00.000Z"
+    },
+    {
+      "id": "25",
+      "description": "Exame médico",
+      "amount": 180.00,
+      "type": "expense",
+      "category": "saude",
+      "date": "2024-02-09T11:00:00.000Z",
+      "createdAt": "2024-02-09T11:00:00.000Z"
+    },
+    {
+      "id": "26",
+      "description": "Certificação profissional",
+      "amount": 450.00,
+      "type": "expense",
+      "category": "educacao",
+      "date": "2024-02-10T14:00:00.000Z",
+      "createdAt": "2024-02-10T14:00:00.000Z"
+    },
+    {
+      "id": "27",
+      "description": "Viagem de fim de semana",
+      "amount": 800.00,
+      "type": "expense",
+      "category": "lazer",
+      "date": "2024-02-11T08:00:00.000Z",
+      "createdAt": "2024-02-11T08:00:00.000Z"
+    },
+    {
+      "id": "28",
+      "description": "IPTU",
+      "amount": 600.00,
+      "type": "expense",
+      "category": "moradia",
+      "date": "2024-02-12T00:00:00.000Z",
+      "createdAt": "2024-02-12T00:00:00.000Z"
+    },
+    {
+      "id": "29",
+      "description": "Dividendos",
+      "amount": 750.00,
+      "type": "income",
+      "category": "outros",
+      "date": "2024-02-13T12:00:00.000Z",
+      "createdAt": "2024-02-13T12:00:00.000Z"
+    },
+    {
+      "id": "30",
+      "description": "Feira livre",
+      "amount": 120.00,
+      "type": "expense",
+      "category": "alimentacao",
+      "date": "2024-02-14T07:00:00.000Z",
+      "createdAt": "2024-02-14T07:00:00.000Z"
+    }
+  ]
+}
+
