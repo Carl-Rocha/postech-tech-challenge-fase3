@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback, useRef } from 'react';
 import {
   View,
   Text,
@@ -146,67 +146,16 @@ export default function TransactionsScreen() {
     );
   };
 
-  const renderHeader = () => (
-    <>
-      {/* saldo */}
-      <View style={styles.balanceCard}>
-        <View style={styles.balanceHeader}>
-          <Text style={styles.balanceLabel}>Saldo Total</Text>
-          <TouchableOpacity onPress={() => setShowFilters(true)}>
-            <Ionicons name="filter" size={24} color="#fff" />
-          </TouchableOpacity>
-        </View>
-        <Text style={styles.balanceAmount}>{formatCurrency(summary.totalBalance)}</Text>
-        <View style={styles.balanceDetails}>
-          <View style={styles.balanceDetailItem}>
-            <Ionicons name="arrow-down-circle" size={16} color="#6DBF58" />
-            <Text style={styles.balanceDetailText}>
-              {formatCurrency(summary.totalIncome)}
-            </Text>
-          </View>
-          <View style={styles.balanceDetailItem}>
-            <Ionicons name="arrow-up-circle" size={16} color="#EF6C4D" />
-            <Text style={styles.balanceDetailText}>
-              {formatCurrency(summary.totalExpense)}
-            </Text>
-          </View>
-        </View>
-      </View>
-
-      {/* busca */}
-      <View style={styles.searchContainer}>
-        <Ionicons name="search" size={20} color="#666" style={styles.searchIcon} />
-        <TextInput
-          style={styles.searchInput}
-          placeholder="Buscar transações..."
-          value={searchText}
-          onChangeText={setSearchText}
-          onSubmitEditing={applyFilters}
-        />
-        {searchText.length > 0 && (
-          <TouchableOpacity onPress={() => setSearchText('')}>
-            <Ionicons name="close-circle" size={20} color="#666" />
-          </TouchableOpacity>
-        )}
-      </View>
-
-      {/* extrato */}
-      <View style={styles.extractHeader}>
-        <Text style={styles.extractTitle}>Extrato</Text>
-        <Text style={styles.extractCount}>
-          {totalCount} {totalCount === 1 ? 'transação' : 'transações'}
-        </Text>
-      </View>
-
-      {/* Mensagem de Erro */}
-      {error && (
-        <View style={styles.errorContainer}>
-          <Ionicons name="alert-circle" size={24} color="#EF6C4D" />
-          <Text style={styles.errorText}>{error}</Text>
-        </View>
-      )}
-    </>
-  );
+  const handleClearSearch = useCallback(() => {
+    setSearchText('');
+    updateFilters({
+      search: undefined,
+      category: selectedCategory,
+      type: selectedType,
+      startDate,
+      endDate,
+    });
+  }, [selectedCategory, selectedType, startDate, endDate, updateFilters]);
 
   const renderFooter = () => {
     if (!isLoadingMore) return null;
@@ -244,12 +193,73 @@ export default function TransactionsScreen() {
         </TouchableOpacity>
       </View>
 
+      {/* Card de Saldo - Fora da FlatList */}
+      <View style={styles.balanceCard}>
+        <View style={styles.balanceHeader}>
+          <Text style={styles.balanceLabel}>Saldo Total</Text>
+          <TouchableOpacity onPress={() => setShowFilters(true)}>
+            <Ionicons name="filter" size={24} color="#fff" />
+          </TouchableOpacity>
+        </View>
+        <Text style={styles.balanceAmount}>{formatCurrency(summary.totalBalance)}</Text>
+        <View style={styles.balanceDetails}>
+          <View style={styles.balanceDetailItem}>
+            <Ionicons name="arrow-down-circle" size={16} color="#6DBF58" />
+            <Text style={styles.balanceDetailText}>
+              {formatCurrency(summary.totalIncome)}
+            </Text>
+          </View>
+          <View style={styles.balanceDetailItem}>
+            <Ionicons name="arrow-up-circle" size={16} color="#EF6C4D" />
+            <Text style={styles.balanceDetailText}>
+              {formatCurrency(summary.totalExpense)}
+            </Text>
+          </View>
+        </View>
+      </View>
+
+      {/* Barra de Busca - Fora da FlatList */}
+      <View style={styles.searchInputContainer}>
+        <Text style={styles.searchLabel}>Buscar</Text>
+        <View style={styles.searchInputWrapper}>
+          <TextInput
+            style={styles.searchInput}
+            placeholder="Digite para buscar transações..."
+            value={searchText}
+            onChangeText={setSearchText}
+            onSubmitEditing={applyFilters}
+            autoCorrect={false}
+            autoCapitalize="none"
+          />
+          {searchText.length > 0 && (
+            <TouchableOpacity onPress={handleClearSearch} style={styles.clearButton}>
+              <Ionicons name="close-circle" size={20} color="#666" />
+            </TouchableOpacity>
+          )}
+        </View>
+      </View>
+
+      {/* Título do Extrato */}
+      <View style={styles.extractHeader}>
+        <Text style={styles.extractTitle}>Extrato</Text>
+        <Text style={styles.extractCount}>
+          {totalCount} {totalCount === 1 ? 'transação' : 'transações'}
+        </Text>
+      </View>
+
+      {/* Mensagem de Erro */}
+      {error && (
+        <View style={styles.errorContainer}>
+          <Ionicons name="alert-circle" size={24} color="#EF6C4D" />
+          <Text style={styles.errorText}>{error}</Text>
+        </View>
+      )}
+
       {/* lista transacao */}
       <FlatList
         data={transactions}
         renderItem={renderTransactionItem}
         keyExtractor={(item) => item.id}
-        ListHeaderComponent={renderHeader}
         ListFooterComponent={renderFooter}
         ListEmptyComponent={!isLoading ? renderEmptyState : null}
         contentContainerStyle={styles.listContent}
@@ -260,6 +270,8 @@ export default function TransactionsScreen() {
         }}
         onEndReachedThreshold={0.5}
         showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+        removeClippedSubviews={false}
       />
 
       {/* add transacao */}
@@ -438,23 +450,36 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
   },
-  searchContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#f5f5f5',
+  searchInputContainer: {
     marginHorizontal: 20,
     marginBottom: 20,
-    paddingHorizontal: 15,
-    borderRadius: 10,
-    height: 50,
   },
-  searchIcon: {
-    marginRight: 10,
+  searchLabel: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#000',
+    marginBottom: 8,
+  },
+  searchInputWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    position: 'relative',
   },
   searchInput: {
     flex: 1,
+    height: 50,
+    borderWidth: 1,
+    borderColor: '#E0E0E0',
+    borderRadius: 8,
+    paddingHorizontal: 15,
     fontSize: 16,
+    backgroundColor: '#fff',
     color: '#333',
+  },
+  clearButton: {
+    position: 'absolute',
+    right: 15,
+    padding: 4,
   },
   extractHeader: {
     flexDirection: 'row',
