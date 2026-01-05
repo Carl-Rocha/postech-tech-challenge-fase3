@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -7,15 +7,221 @@ import {
   StatusBar,
   TouchableOpacity,
   ScrollView,
+  TextInput,
+  KeyboardAvoidingView,
+  Platform,
+  Alert,
+  ActivityIndicator,
+  Modal,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { TransactionType, TransactionCategory } from '@/types/transaction';
+import { API_ENDPOINTS } from '@/config/api';
 
 const THEME_COLOR = '#EF6C4D';
 const HEADER_BG = '#000';
 
+const CATEGORY_LABELS: Record<TransactionCategory, string> = {
+  alimentacao: 'Alimentação',
+  transporte: 'Transporte',
+  saude: 'Saúde',
+  educacao: 'Educação',
+  lazer: 'Lazer',
+  moradia: 'Moradia',
+  salario: 'Salário',
+  outros: 'Outros',
+};
+
+const CATEGORY_ICONS: Record<TransactionCategory, string> = {
+  alimentacao: 'restaurant',
+  transporte: 'car',
+  saude: 'medical',
+  educacao: 'school',
+  lazer: 'happy',
+  moradia: 'home',
+  salario: 'cash',
+  outros: 'ellipse',
+};
+
 export default function AddTransactionScreen() {
   const router = useRouter();
+  const [transactionType, setTransactionType] = useState<TransactionType>('expense');
+  const [title, setTitle] = useState('');
+  const [amount, setAmount] = useState('');
+  const [date, setDate] = useState('');
+  const [category, setCategory] = useState<TransactionCategory>('outros');
+  const [showCategoryModal, setShowCategoryModal] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+
+  const formatCurrency = (value: string) => {
+    // Remove tudo que não é número
+    const numbers = value.replace(/\D/g, '');
+    
+    if (numbers === '') return '';
+    
+    // Converte para número e divide por 100 para ter centavos
+    const amount = parseFloat(numbers) / 100;
+    
+    // Formata como moeda brasileira
+    return new Intl.NumberFormat('pt-BR', {
+      style: 'currency',
+      currency: 'BRL',
+      minimumFractionDigits: 2,
+    }).format(amount);
+  };
+
+  const handleAmountChange = (text: string) => {
+    // Remove formatação anterior
+    const numbers = text.replace(/\D/g, '');
+    
+    if (numbers === '') {
+      setAmount('');
+      return;
+    }
+    
+    // Formata como moeda
+    const formatted = formatCurrency(numbers);
+    setAmount(formatted);
+  };
+
+  const formatDate = (text: string): string => {
+    // Remove tudo que não é número
+    const numbers = text.replace(/\D/g, '');
+    
+    if (numbers === '') return '';
+    
+    // Limita a 8 dígitos (DDMMYYYY)
+    const limited = numbers.slice(0, 8);
+    
+    // Formata como DD/MM/YYYY
+    if (limited.length <= 2) {
+      return limited;
+    } else if (limited.length <= 4) {
+      return `${limited.slice(0, 2)}/${limited.slice(2)}`;
+    } else {
+      return `${limited.slice(0, 2)}/${limited.slice(2, 4)}/${limited.slice(4)}`;
+    }
+  };
+
+  const handleDateChange = (text: string) => {
+    const formatted = formatDate(text);
+    setDate(formatted);
+  };
+
+  const parseDate = (dateString: string): Date | null => {
+    if (!dateString || dateString.length < 10) {
+      return null;
+    }
+    
+    // Formato esperado: DD/MM/YYYY
+    const parts = dateString.split('/');
+    if (parts.length !== 3) return null;
+    
+    const day = parseInt(parts[0], 10);
+    const month = parseInt(parts[1], 10) - 1; // Mês é 0-indexed
+    const year = parseInt(parts[2], 10);
+    
+    if (isNaN(day) || isNaN(month) || isNaN(year)) return null;
+    
+    const date = new Date(year, month, day);
+    
+    // Valida se a data é válida
+    if (
+      date.getDate() !== day ||
+      date.getMonth() !== month ||
+      date.getFullYear() !== year
+    ) {
+      return null;
+    }
+    
+    return date;
+  };
+
+  const getAmountAsNumber = (): number => {
+    const numbers = amount.replace(/\D/g, '');
+    if (numbers === '') return 0;
+    return parseFloat(numbers) / 100;
+  };
+
+  const getAvailableCategories = (): TransactionCategory[] => {
+    if (transactionType === 'income') {
+      return ['salario', 'outros'];
+    }
+    return ['alimentacao', 'transporte', 'saude', 'educacao', 'lazer', 'moradia', 'outros'];
+  };
+
+  // Ajusta categoria quando o tipo muda
+  useEffect(() => {
+    const availableCategories = getAvailableCategories();
+    if (!availableCategories.includes(category)) {
+      // Se a categoria atual não é válida para o novo tipo, muda para a primeira disponível
+      setCategory(availableCategories[0]);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [transactionType]);
+
+  const handleCategoryChange = (newCategory: TransactionCategory) => {
+    setCategory(newCategory);
+    setShowCategoryModal(false);
+  };
+
+  const handleSave = async () => {
+    if (!title.trim() || !amount || !date || !category) {
+      Alert.alert('Erro', 'Preencha todos os campos');
+      return;
+    }
+
+    const amountValue = getAmountAsNumber();
+    if (amountValue === 0) {
+      Alert.alert('Erro', 'O valor deve ser maior que zero');
+      return;
+    }
+
+    const transactionDate = parseDate(date);
+    if (!transactionDate) {
+      Alert.alert('Erro', 'Data inválida. Use o formato DD/MM/YYYY');
+      return;
+    }
+
+    if (isSaving) return; // Previne múltiplos cliques
+
+    setIsSaving(true);
+
+    try {
+      const now = new Date();
+      const transaction = {
+        description: title.trim(),
+        amount: amountValue,
+        type: transactionType,
+        category: category,
+        date: transactionDate.toISOString(),
+        createdAt: now.toISOString(),
+      };
+
+      const response = await fetch(API_ENDPOINTS.transactions, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(transaction),
+      });
+
+      if (!response.ok) {
+        throw new Error(`Erro ao salvar: ${response.status}`);
+      }
+
+      // Usa replace para evitar loops e forçar reload limpo
+      router.replace('/transactions?refresh=' + Date.now());
+    } catch (error) {
+      console.error('Erro ao salvar transação:', error);
+      Alert.alert(
+        'Erro',
+        'Não foi possível salvar a transação. Verifique se o servidor está rodando.'
+      );
+      setIsSaving(false);
+    }
+  };
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -31,15 +237,175 @@ export default function AddTransactionScreen() {
         <View style={{ width: 28 }} />
       </View>
 
-      <ScrollView contentContainerStyle={styles.content}>
-        <View style={styles.placeholder}>
-          <Ionicons name="add-circle-outline" size={64} color="#ccc" />
-          <Text style={styles.placeholderText}>Tela de Adicionar Transação</Text>
-          <Text style={styles.placeholderSubtext}>
-            Esta tela será implementada para adicionar novas transações
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        style={{ flex: 1 }}>
+        <ScrollView contentContainerStyle={styles.content}>
+          <Text style={styles.title}>
+            Preencha os dados da transação
           </Text>
+
+          <View style={styles.inputContainer}>
+            {/* Seleção de Tipo */}
+            <Text style={styles.label}>Tipo de Transação</Text>
+            <View style={styles.typeSelector}>
+              <TouchableOpacity
+                style={[
+                  styles.typeOption,
+                  transactionType === 'income' && styles.typeOptionActive,
+                ]}
+                onPress={() => setTransactionType('income')}>
+                <Ionicons
+                  name="arrow-down-circle"
+                  size={24}
+                  color={transactionType === 'income' ? '#fff' : '#6DBF58'}
+                />
+                <Text
+                  style={[
+                    styles.typeOptionText,
+                    transactionType === 'income' && styles.typeOptionTextActive,
+                  ]}>
+                  Receita
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[
+                  styles.typeOption,
+                  transactionType === 'expense' && styles.typeOptionActive,
+                ]}
+                onPress={() => setTransactionType('expense')}>
+                <Ionicons
+                  name="arrow-up-circle"
+                  size={24}
+                  color={transactionType === 'expense' ? '#fff' : '#EF6C4D'}
+                />
+                <Text
+                  style={[
+                    styles.typeOptionText,
+                    transactionType === 'expense' && styles.typeOptionTextActive,
+                  ]}>
+                  Despesa
+                </Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* Input de Título */}
+            <Text style={styles.label}>Título</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="Digite o título da transação"
+              value={title}
+              onChangeText={setTitle}
+              maxLength={100}
+            />
+
+            {/* Input de Data */}
+            <Text style={styles.label}>Data</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="DD/MM/YYYY"
+              value={date}
+              onChangeText={handleDateChange}
+              keyboardType="numeric"
+              maxLength={10}
+            />
+
+            {/* Seleção de Categoria */}
+            <Text style={styles.label}>Categoria</Text>
+            <TouchableOpacity
+              style={styles.categorySelector}
+              onPress={() => setShowCategoryModal(true)}>
+              <View style={styles.categorySelectorContent}>
+                <Ionicons
+                  name={CATEGORY_ICONS[category] as any}
+                  size={20}
+                  color={THEME_COLOR}
+                />
+                <Text style={styles.categorySelectorText}>
+                  {CATEGORY_LABELS[category]}
+                </Text>
+              </View>
+              <Ionicons name="chevron-down" size={20} color="#666" />
+            </TouchableOpacity>
+
+            {/* Input de Valor */}
+            <Text style={styles.label}>Valor</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="R$ 0,00"
+              value={amount}
+              onChangeText={handleAmountChange}
+              keyboardType="numeric"
+              maxLength={20}
+            />
+          </View>
+
+          {/* Botão de Salvar */}
+          <TouchableOpacity
+            style={[
+              styles.button,
+              (isSaving || !title.trim() || !amount || !date || !category || parseFloat(amount.replace(/\D/g, '')) === 0) &&
+                styles.buttonDisabled,
+            ]}
+            onPress={handleSave}
+            disabled={isSaving || !title.trim() || !amount || !date || !category || parseFloat(amount.replace(/\D/g, '')) === 0}>
+            {isSaving ? (
+              <ActivityIndicator color="#fff" />
+            ) : (
+              <Text style={styles.buttonText}>Salvar Transação</Text>
+            )}
+          </TouchableOpacity>
+        </ScrollView>
+      </KeyboardAvoidingView>
+
+      {/* Modal de Seleção de Categoria */}
+      <Modal
+        visible={showCategoryModal}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setShowCategoryModal(false)}>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Selecione a Categoria</Text>
+              <TouchableOpacity onPress={() => setShowCategoryModal(false)}>
+                <Ionicons name="close" size={28} color="#333" />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView style={styles.modalBody}>
+              {getAvailableCategories().map((cat) => (
+                <TouchableOpacity
+                  key={cat}
+                  style={[
+                    styles.categoryOption,
+                    category === cat && styles.categoryOptionActive,
+                  ]}
+                  onPress={() => handleCategoryChange(cat)}>
+                  <View style={styles.categoryOptionContent}>
+                    <Ionicons
+                      name={CATEGORY_ICONS[cat] as any}
+                      size={24}
+                      color={category === cat ? '#fff' : THEME_COLOR}
+                    />
+                    <Text
+                      style={[
+                        styles.categoryOptionText,
+                        category === cat && styles.categoryOptionTextActive,
+                      ]}>
+                      {CATEGORY_LABELS[cat]}
+                    </Text>
+                  </View>
+                  {category === cat && (
+                    <Ionicons name="checkmark-circle" size={24} color="#fff" />
+                  )}
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </View>
         </View>
-      </ScrollView>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -64,25 +430,160 @@ const styles = StyleSheet.create({
   content: {
     flex: 1,
     backgroundColor: '#fff',
-    padding: 20,
+    padding: 24,
   },
-  placeholder: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 60,
-  },
-  placeholderText: {
+  title: {
     fontSize: 18,
-    fontWeight: '600',
-    color: '#666',
-    marginTop: 20,
+    fontWeight: '700',
+    color: '#333',
+    marginBottom: 30,
+    textAlign: 'left',
+  },
+  inputContainer: {
+    marginBottom: 10,
+  },
+  label: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#000',
     marginBottom: 8,
   },
-  placeholderSubtext: {
-    fontSize: 14,
-    color: '#999',
-    textAlign: 'center',
+  typeSelector: {
+    flexDirection: 'row',
+    gap: 10,
+    marginBottom: 20,
+  },
+  typeOption: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 14,
+    paddingHorizontal: 20,
+    borderRadius: 8,
+    borderWidth: 2,
+    borderColor: '#E0E0E0',
+    backgroundColor: '#fff',
+  },
+  typeOptionActive: {
+    borderColor: THEME_COLOR,
+    backgroundColor: THEME_COLOR,
+  },
+  typeOptionText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#666',
+  },
+  typeOptionTextActive: {
+    color: '#fff',
+  },
+  input: {
+    height: 50,
+    borderWidth: 1,
+    borderColor: '#E0E0E0',
+    borderRadius: 8,
+    paddingHorizontal: 15,
+    marginBottom: 5,
+    fontSize: 16,
+    backgroundColor: '#fff',
+    color: '#333',
+  },
+  categorySelector: {
+    height: 50,
+    borderWidth: 1,
+    borderColor: '#E0E0E0',
+    borderRadius: 8,
+    paddingHorizontal: 15,
+    marginBottom: 5,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#fff',
+  },
+  categorySelectorContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  categorySelectorText: {
+    fontSize: 16,
+    color: '#333',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'flex-end',
+  },
+  modalContent: {
+    backgroundColor: '#fff',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    maxHeight: '70%',
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: '#eee',
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#333',
+  },
+  modalBody: {
+    padding: 20,
+  },
+  categoryOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: 15,
+    borderRadius: 8,
+    marginBottom: 10,
+    borderWidth: 2,
+    borderColor: '#E0E0E0',
+    backgroundColor: '#fff',
+  },
+  categoryOptionActive: {
+    borderColor: THEME_COLOR,
+    backgroundColor: THEME_COLOR,
+  },
+  categoryOptionContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  categoryOptionText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#333',
+  },
+  categoryOptionTextActive: {
+    color: '#fff',
+  },
+  button: {
+    backgroundColor: THEME_COLOR,
+    height: 55,
+    borderRadius: 8,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginTop: 20,
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+  },
+  buttonDisabled: {
+    backgroundColor: '#FFBCA8',
+  },
+  buttonText: {
+    color: '#fff',
+    fontSize: 18,
+    fontWeight: 'bold',
   },
 });
-

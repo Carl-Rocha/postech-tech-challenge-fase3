@@ -12,7 +12,7 @@ import {
   Modal,
   ActivityIndicator,
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useTransactions } from '@/hooks/useTransactions';
 import { Transaction, TransactionCategory, TransactionType } from '@/types/transaction';
@@ -44,6 +44,7 @@ const CATEGORY_ICONS: Record<TransactionCategory, string> = {
 
 export default function TransactionsScreen() {
   const router = useRouter();
+  const params = useLocalSearchParams();
   const [showFilters, setShowFilters] = useState(false);
   const [searchText, setSearchText] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<TransactionCategory | undefined>();
@@ -61,7 +62,21 @@ export default function TransactionsScreen() {
     hasMore,
     totalCount,
     error,
+    refetch,
   } = useTransactions();
+
+  // Atualiza apenas quando há parâmetro refresh (evita loop)
+  React.useEffect(() => {
+    if (params.refresh) {
+      // Pequeno delay para garantir que a transação foi salva
+      const timer = setTimeout(() => {
+        refetch();
+        // Remove o parâmetro da URL para evitar re-execução
+        router.setParams({ refresh: undefined });
+      }, 300);
+      return () => clearTimeout(timer);
+    }
+  }, [params.refresh, refetch, router]);
 
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('pt-BR', {
