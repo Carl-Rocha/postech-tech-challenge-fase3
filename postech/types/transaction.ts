@@ -17,6 +17,9 @@ export interface Transaction {
   category: TransactionCategory;
   date: Date;
   createdAt: Date;
+  imageUri?: string;
+  imageType?: 'image' | 'pdf';
+  fileName?: string;
 }
 
 export interface TransactionFilters {

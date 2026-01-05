@@ -13,9 +13,12 @@ import {
   Alert,
   ActivityIndicator,
   Modal,
+  Image,
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import * as ImagePicker from 'expo-image-picker';
+import * as DocumentPicker from 'expo-document-picker';
 import { TransactionType, TransactionCategory } from '@/types/transaction';
 import { API_ENDPOINTS } from '@/config/api';
 
@@ -58,6 +61,10 @@ export default function AddTransactionScreen() {
   const [showCategoryModal, setShowCategoryModal] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [selectedImage, setSelectedImage] = useState<string | null>(null);
+  const [imageType, setImageType] = useState<'image' | 'pdf' | null>(null);
+  const [fileName, setFileName] = useState<string | null>(null);
+  const [showFilePickerModal, setShowFilePickerModal] = useState(false);
 
   const formatCurrency = (value: string) => {
     const numbers = value.replace(/\D/g, '');
@@ -145,6 +152,55 @@ export default function AddTransactionScreen() {
     return ['alimentacao', 'transporte', 'saude', 'educacao', 'lazer', 'moradia', 'outros'];
   };
 
+  // Função para converter URI para base64
+  const uriToBase64 = async (uri: string): Promise<string> => {
+    try {
+      // Se já for base64, retorna direto
+      if (uri.startsWith('data:')) {
+        return uri;
+      }
+
+      // Para web e React Native, usa fetch para ler o arquivo
+      const response = await fetch(uri);
+      const blob = await response.blob();
+      
+      // Usa FileReader se disponível (web e alguns ambientes React Native)
+      if (typeof FileReader !== 'undefined') {
+        return new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onloadend = () => {
+            const base64String = reader.result as string;
+            resolve(base64String);
+          };
+          reader.onerror = reject;
+          reader.readAsDataURL(blob);
+        });
+      } else {
+        // Fallback para ambientes sem FileReader: converte blob para base64 manualmente
+        const arrayBuffer = await blob.arrayBuffer();
+        const uint8Array = new Uint8Array(arrayBuffer);
+        
+        // Converte para string base64 em chunks para evitar problemas com arrays grandes
+        let binary = '';
+        const chunkSize = 8192;
+        for (let i = 0; i < uint8Array.length; i += chunkSize) {
+          const chunk = uint8Array.subarray(i, i + chunkSize);
+          binary += String.fromCharCode.apply(null, Array.from(chunk));
+        }
+        
+        const base64 = btoa(binary);
+        // Determina o tipo MIME baseado na extensão ou usa um padrão
+        const mimeType = uri.endsWith('.pdf') || uri.includes('pdf') 
+          ? 'application/pdf' 
+          : 'image/jpeg';
+        return `data:${mimeType};base64,${base64}`;
+      }
+    } catch (error) {
+      console.error('Erro ao converter URI para base64:', error);
+      throw error;
+    }
+  };
+
   useEffect(() => {
     if (transactionId && !isLoading) {
       setIsLoading(true);
@@ -167,11 +223,18 @@ export default function AddTransactionScreen() {
           const year = transactionDate.getFullYear();
           setDate(`${day}/${month}/${year}`);
           setCategory(data.category);
+          if (data.imageUri) {
+            // Se já for base64 (data URI), usa diretamente
+            // Se for blob URI antigo, não será encontrado, mas não quebra a aplicação
+            setSelectedImage(data.imageUri);
+            setImageType(data.imageType || 'image');
+            setFileName(data.fileName || 'arquivo_anexado');
+          }
         })
         .catch((error) => {
           console.error('Erro ao carregar transação:', error);
           Alert.alert('Erro', 'Não foi possível carregar a transação.');
-          router.back();
+          router.push('/transactions');
         })
         .finally(() => setIsLoading(false));
     }
@@ -191,6 +254,92 @@ export default function AddTransactionScreen() {
   const handleCategoryChange = (newCategory: TransactionCategory) => {
     setCategory(newCategory);
     setShowCategoryModal(false);
+  };
+
+  const handleSelectImage = async () => {
+    try {
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Permissão necessária', 'Precisamos de permissão para acessar suas imagens.');
+        return;
+      }
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: [4, 3],
+        quality: 0.8,
+      });
+
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        const asset = result.assets[0];
+        // Converte para base64 para persistência
+        try {
+          const base64 = await uriToBase64(asset.uri);
+          setSelectedImage(base64);
+          setImageType('image');
+          setFileName(asset.fileName || asset.uri.split('/').pop() || 'imagem.jpg');
+        } catch (error) {
+          console.error('Erro ao converter imagem:', error);
+          Alert.alert('Erro', 'Não foi possível processar a imagem. Tente novamente.');
+        }
+      }
+    } catch (error) {
+      console.error('Erro ao selecionar imagem:', error);
+      Alert.alert('Erro', 'Não foi possível selecionar a imagem. Tente novamente.');
+    }
+  };
+
+  const handleSelectPDF = async () => {
+    try {
+      const result = await DocumentPicker.getDocumentAsync({
+        type: ['application/pdf'],
+        copyToCacheDirectory: true,
+      });
+
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        const asset = result.assets[0];
+        // Converte para base64 para persistência
+        try {
+          const base64 = await uriToBase64(asset.uri);
+          setSelectedImage(base64);
+          setImageType('pdf');
+          setFileName(asset.name || 'documento.pdf');
+        } catch (error) {
+          console.error('Erro ao converter PDF:', error);
+          Alert.alert('Erro', 'Não foi possível processar o arquivo PDF. Tente novamente.');
+        }
+      }
+    } catch (error: any) {
+      // Se o usuário cancelou, não precisa mostrar erro
+      const errorMessage = error?.message || String(error);
+      if (errorMessage.includes('cancel') || errorMessage.includes('Cancel')) {
+        return;
+      }
+      console.error('Erro ao selecionar PDF:', error);
+      Alert.alert('Erro', 'Não foi possível selecionar o arquivo PDF. Tente novamente.');
+    }
+  };
+
+  const handleSelectFile = () => {
+    console.log('handleSelectFile chamado');
+    setShowFilePickerModal(true);
+  };
+
+  const handleSelectImageOption = async () => {
+    setShowFilePickerModal(false);
+    await handleSelectImage();
+  };
+
+  const handleSelectPDFOption = async () => {
+    setShowFilePickerModal(false);
+    await handleSelectPDF();
+  };
+
+  const handleRemoveImage = () => {
+    setSelectedImage(null);
+    setImageType(null);
+    setFileName(null);
   };
 
   const handleSave = async () => {
@@ -222,6 +371,13 @@ export default function AddTransactionScreen() {
         category: category,
         date: transactionDate.toISOString(),
         ...(isEditing ? {} : { createdAt: now.toISOString() }),
+        ...(selectedImage
+          ? {
+              imageUri: selectedImage,
+              imageType: imageType,
+              fileName: fileName || undefined,
+            }
+          : {}),
       };
 
       const url = isEditing
@@ -258,7 +414,7 @@ export default function AddTransactionScreen() {
       <StatusBar barStyle="light-content" backgroundColor={HEADER_BG} />
 
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()}>
+        <TouchableOpacity onPress={() => router.push('/transactions')}>
           <Ionicons name="chevron-back" size={28} color="#fff" />
         </TouchableOpacity>
         <Text style={styles.logoText}>
@@ -270,7 +426,10 @@ export default function AddTransactionScreen() {
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={{ flex: 1 }}>
-        <ScrollView contentContainerStyle={styles.content}>
+        <ScrollView
+          contentContainerStyle={styles.content}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}>
           <Text style={styles.title}>
             Preencha os dados da transação
           </Text>
@@ -368,6 +527,48 @@ export default function AddTransactionScreen() {
               keyboardType="numeric"
               maxLength={20}
             />
+
+            {/* anexo */}
+            <Text style={styles.label}>Anexo (Opcional)</Text>
+            {selectedImage ? (
+              <View style={styles.imageContainer}>
+                {imageType === 'image' ? (
+                  <Image source={{ uri: selectedImage }} style={styles.previewImage} resizeMode="cover" />
+                ) : (
+                  <View style={styles.pdfPreview}>
+                    <Ionicons name="document" size={48} color={THEME_COLOR} />
+                    <Text style={styles.pdfFileName} numberOfLines={1}>
+                      {fileName}
+                    </Text>
+                  </View>
+                )}
+                <View style={styles.imageActions}>
+                  <TouchableOpacity
+                    style={styles.removeImageButton}
+                    onPress={handleRemoveImage}>
+                    <Ionicons name="trash-outline" size={20} color="#EF6C4D" />
+                    <Text style={styles.removeImageText}>Remover</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={styles.changeImageButton}
+                    onPress={handleSelectFile}>
+                    <Ionicons name="create-outline" size={20} color={THEME_COLOR} />
+                    <Text style={styles.changeImageText}>Alterar</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            ) : (
+              <TouchableOpacity
+                style={styles.selectFileButton}
+                onPress={handleSelectFile}
+                activeOpacity={0.7}
+                accessibilityLabel="Selecionar arquivo">
+                <Ionicons name="attach-outline" size={24} color={THEME_COLOR} />
+                <Text style={styles.selectFileText}>
+                  Selecionar arquivo (JPG, JPEG ou PDF)
+                </Text>
+              </TouchableOpacity>
+            )}
           </View>
 
           {/* btn salvar */}
@@ -441,6 +642,57 @@ export default function AddTransactionScreen() {
                 </TouchableOpacity>
               ))}
             </ScrollView>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Modal de Seleção de Arquivo */}
+      <Modal
+        visible={showFilePickerModal}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setShowFilePickerModal(false)}>
+        <View style={styles.modalOverlay}>
+          <View style={styles.filePickerModalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Selecionar Arquivo</Text>
+              <TouchableOpacity onPress={() => setShowFilePickerModal(false)}>
+                <Ionicons name="close" size={28} color="#333" />
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.filePickerOptions}>
+              <TouchableOpacity
+                style={styles.filePickerOption}
+                onPress={handleSelectImageOption}
+                activeOpacity={0.7}>
+                <View style={styles.filePickerOptionContent}>
+                  <Ionicons name="image-outline" size={32} color={THEME_COLOR} />
+                  <Text style={styles.filePickerOptionText}>Imagem (JPG/JPEG)</Text>
+                  <Text style={styles.filePickerOptionSubtext}>Selecionar da galeria</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={24} color="#666" />
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.filePickerOption}
+                onPress={handleSelectPDFOption}
+                activeOpacity={0.7}>
+                <View style={styles.filePickerOptionContent}>
+                  <Ionicons name="document-outline" size={32} color={THEME_COLOR} />
+                  <Text style={styles.filePickerOptionText}>PDF</Text>
+                  <Text style={styles.filePickerOptionSubtext}>Selecionar documento</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={24} color="#666" />
+              </TouchableOpacity>
+            </View>
+
+            <TouchableOpacity
+              style={styles.filePickerCancelButton}
+              onPress={() => setShowFilePickerModal(false)}
+              activeOpacity={0.7}>
+              <Text style={styles.filePickerCancelText}>Cancelar</Text>
+            </TouchableOpacity>
           </View>
         </View>
       </Modal>
@@ -611,10 +863,16 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginTop: 20,
     elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
+    ...(Platform.OS === 'web'
+      ? {
+          boxShadow: '0px 2px 4px rgba(0, 0, 0, 0.1)',
+        }
+      : {
+          shadowColor: '#000',
+          shadowOffset: { width: 0, height: 2 },
+          shadowOpacity: 0.1,
+          shadowRadius: 4,
+        }),
   },
   buttonDisabled: {
     backgroundColor: '#FFBCA8',
@@ -633,6 +891,138 @@ const styles = StyleSheet.create({
   loadingText: {
     marginTop: 12,
     fontSize: 16,
+    color: '#666',
+  },
+  selectFileButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    height: 50,
+    borderWidth: 2,
+    borderColor: THEME_COLOR,
+    borderStyle: 'dashed',
+    borderRadius: 8,
+    backgroundColor: '#FFF5F3',
+    gap: 8,
+    paddingHorizontal: 16,
+    minHeight: 50,
+  },
+  selectFileText: {
+    fontSize: 16,
+    color: THEME_COLOR,
+    fontWeight: '600',
+  },
+  imageContainer: {
+    borderWidth: 1,
+    borderColor: '#E0E0E0',
+    borderRadius: 8,
+    padding: 12,
+    backgroundColor: '#fff',
+  },
+  previewImage: {
+    width: '100%',
+    height: 200,
+    borderRadius: 8,
+    marginBottom: 12,
+  },
+  pdfPreview: {
+    width: '100%',
+    height: 150,
+    borderRadius: 8,
+    marginBottom: 12,
+    backgroundColor: '#F5F5F5',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  pdfFileName: {
+    fontSize: 14,
+    color: '#666',
+    fontWeight: '600',
+    maxWidth: '90%',
+  },
+  imageActions: {
+    flexDirection: 'row',
+    gap: 12,
+    justifyContent: 'center',
+  },
+  removeImageButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#EF6C4D',
+    backgroundColor: '#fff',
+  },
+  removeImageText: {
+    fontSize: 14,
+    color: '#EF6C4D',
+    fontWeight: '600',
+  },
+  changeImageButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 6,
+    backgroundColor: THEME_COLOR,
+  },
+  changeImageText: {
+    fontSize: 14,
+    color: '#fff',
+    fontWeight: '600',
+  },
+  filePickerModalContent: {
+    backgroundColor: '#fff',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    maxHeight: '60%',
+    paddingBottom: 20,
+  },
+  filePickerOptions: {
+    padding: 20,
+    gap: 12,
+  },
+  filePickerOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: 16,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#E0E0E0',
+    backgroundColor: '#fff',
+  },
+  filePickerOptionContent: {
+    flex: 1,
+    gap: 4,
+  },
+  filePickerOptionText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#333',
+  },
+  filePickerOptionSubtext: {
+    fontSize: 12,
+    color: '#666',
+  },
+  filePickerCancelButton: {
+    marginHorizontal: 20,
+    marginTop: 10,
+    paddingVertical: 14,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#E0E0E0',
+    alignItems: 'center',
+    backgroundColor: '#fff',
+  },
+  filePickerCancelText: {
+    fontSize: 16,
+    fontWeight: '600',
     color: '#666',
   },
 });
