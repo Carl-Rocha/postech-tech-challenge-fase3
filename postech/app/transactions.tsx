@@ -196,7 +196,7 @@ export default function TransactionsScreen() {
       <StatusBar barStyle="light-content" backgroundColor={HEADER_BG} />
 
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()}>
+        <TouchableOpacity onPress={() => router.push('/')}>
           <Ionicons name="chevron-back" size={28} color="#fff" />
         </TouchableOpacity>
         <Text style={styles.logoText}>
