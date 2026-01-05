@@ -65,13 +65,10 @@ export default function TransactionsScreen() {
     refetch,
   } = useTransactions();
 
-  // Atualiza apenas quando há parâmetro refresh (evita loop)
   React.useEffect(() => {
     if (params.refresh) {
-      // Pequeno delay para garantir que a transação foi salva
       const timer = setTimeout(() => {
         refetch();
-        // Remove o parâmetro da URL para evitar re-execução
         router.setParams({ refresh: undefined });
       }, 300);
       return () => clearTimeout(timer);
@@ -148,14 +145,22 @@ export default function TransactionsScreen() {
           <Text style={styles.transactionCategory}>{CATEGORY_LABELS[item.category]}</Text>
           <Text style={styles.transactionDate}>{formatDateShort(item.date)}</Text>
         </View>
-        <View style={styles.transactionAmount}>
-          <Text
-            style={[
-              styles.transactionAmountText,
-              isIncome ? styles.incomeAmount : styles.expenseAmount,
-            ]}>
-            {isIncome ? '+' : '-'} {formatCurrency(item.amount)}
-          </Text>
+        <View style={styles.transactionRightSection}>
+          <View style={styles.transactionAmount}>
+            <Text
+              style={[
+                styles.transactionAmountText,
+                isIncome ? styles.incomeAmount : styles.expenseAmount,
+              ]}>
+              {isIncome ? '+' : '-'} {formatCurrency(item.amount)}
+            </Text>
+          </View>
+          <TouchableOpacity
+            style={styles.editButton}
+            onPress={() => router.push(`/add-transaction?id=${item.id}`)}
+            activeOpacity={0.7}>
+            <Ionicons name="create-outline" size={20} color={THEME_COLOR} />
+          </TouchableOpacity>
         </View>
       </View>
     );
@@ -208,7 +213,7 @@ export default function TransactionsScreen() {
         </TouchableOpacity>
       </View>
 
-      {/* Card de Saldo - Fora da FlatList */}
+      {/* saldo */}
       <View style={styles.balanceCard}>
         <View style={styles.balanceHeader}>
           <Text style={styles.balanceLabel}>Saldo Total</Text>
@@ -233,7 +238,6 @@ export default function TransactionsScreen() {
         </View>
       </View>
 
-      {/* Barra de Busca - Fora da FlatList */}
       <View style={styles.searchInputContainer}>
         <Text style={styles.searchLabel}>Buscar</Text>
         <View style={styles.searchInputWrapper}>
@@ -254,7 +258,6 @@ export default function TransactionsScreen() {
         </View>
       </View>
 
-      {/* Título do Extrato */}
       <View style={styles.extractHeader}>
         <Text style={styles.extractTitle}>Extrato</Text>
         <Text style={styles.extractCount}>
@@ -262,7 +265,6 @@ export default function TransactionsScreen() {
         </Text>
       </View>
 
-      {/* Mensagem de Erro */}
       {error && (
         <View style={styles.errorContainer}>
           <Ionicons name="alert-circle" size={24} color="#EF6C4D" />
@@ -472,7 +474,7 @@ const styles = StyleSheet.create({
   searchLabel: {
     fontSize: 16,
     fontWeight: 'bold',
-    color: '#000',
+    color: '#fff',
     marginBottom: 8,
   },
   searchInputWrapper: {
@@ -559,6 +561,11 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#999',
   },
+  transactionRightSection: {
+    alignItems: 'flex-end',
+    justifyContent: 'center',
+    gap: 8,
+  },
   transactionAmount: {
     alignItems: 'flex-end',
     justifyContent: 'center',
@@ -566,6 +573,11 @@ const styles = StyleSheet.create({
   transactionAmountText: {
     fontSize: 16,
     fontWeight: 'bold',
+  },
+  editButton: {
+    padding: 6,
+    borderRadius: 6,
+    backgroundColor: '#FFF5F3',
   },
   incomeAmount: {
     color: '#6DBF58',

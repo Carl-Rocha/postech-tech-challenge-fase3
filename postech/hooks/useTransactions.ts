@@ -4,18 +4,16 @@ import { API_ENDPOINTS } from '@/config/api';
 
 const ITEMS_PER_PAGE = 20;
 
-// Função para converter string de data para Date
 const parseDate = (dateString: string | Date): Date => {
   if (dateString instanceof Date) return dateString;
   return new Date(dateString);
 };
 
-// Função para formatar data para query string
 const formatDateForQuery = (date: Date): string => {
   return date.toISOString().split('T')[0];
 };
 
-// Função para construir query string de filtros
+// construir query string de filtros
 const buildQueryString = (filters: TransactionFilters, page: number, limit: number): string => {
   const params = new URLSearchParams();
   
@@ -35,7 +33,6 @@ const buildQueryString = (filters: TransactionFilters, page: number, limit: numb
     params.append('q', filters.search);
   }
   
-  // Paginação
   params.append('_page', page.toString());
   params.append('_limit', limit.toString());
   params.append('_sort', 'date');
@@ -44,7 +41,7 @@ const buildQueryString = (filters: TransactionFilters, page: number, limit: numb
   return params.toString();
 };
 
-// Função para buscar transações da API
+// buscar transacoes
 const fetchTransactions = async (
   filters: TransactionFilters,
   page: number
@@ -64,7 +61,6 @@ const fetchTransactions = async (
       ? parseInt(response.headers.get('X-Total-Count') || '0', 10)
       : data.length;
     
-    // Converter strings de data para objetos Date
     const transactions = data.map((transaction) => ({
       ...transaction,
       date: parseDate(transaction.date),
@@ -78,7 +74,7 @@ const fetchTransactions = async (
   }
 };
 
-// Função para buscar todas as transações (para cálculo de resumo)
+// buscar todas as transacoes (para calculo)
 const fetchAllTransactions = async (filters: TransactionFilters): Promise<Transaction[]> => {
   try {
     const params = new URLSearchParams();
@@ -106,14 +102,12 @@ const fetchAllTransactions = async (filters: TransactionFilters): Promise<Transa
     
     const data: Transaction[] = await response.json();
     
-    // Converter strings de data para objetos Date
     const transactions = data.map((transaction) => ({
       ...transaction,
       date: parseDate(transaction.date),
       createdAt: parseDate(transaction.createdAt),
     }));
     
-    // Aplicar filtro de busca no cliente (JSON Server não suporta busca em texto completo)
     if (filters.search) {
       const searchLower = filters.search.toLowerCase();
       return transactions.filter((transaction) =>
@@ -143,7 +137,6 @@ export function useTransactions(initialFilters?: TransactionFilters) {
   });
   const [error, setError] = useState<string | null>(null);
 
-  // Calcular resumo
   const calculateSummary = useCallback((transactions: Transaction[]): TransactionSummary => {
     const income = transactions
       .filter((t) => t.type === 'income')
@@ -160,7 +153,6 @@ export function useTransactions(initialFilters?: TransactionFilters) {
     };
   }, []);
 
-  // Carregar transações da API
   const loadTransactions = useCallback(
     async (page: number, append: boolean = false) => {
       const loadingState = page === 1 ? setIsLoading : setIsLoadingMore;
@@ -189,7 +181,6 @@ export function useTransactions(initialFilters?: TransactionFilters) {
     [filters, displayedTransactions.length]
   );
 
-  // Carregar resumo
   const loadSummary = useCallback(async () => {
     try {
       const allTransactions = await fetchAllTransactions(filters);
@@ -200,7 +191,6 @@ export function useTransactions(initialFilters?: TransactionFilters) {
     }
   }, [filters, calculateSummary]);
 
-  // Atualizar filtros e resetar paginação
   const updateFilters = useCallback((newFilters: TransactionFilters) => {
     setFilters(newFilters);
     setCurrentPage(1);
@@ -208,13 +198,11 @@ export function useTransactions(initialFilters?: TransactionFilters) {
     setHasMore(true);
   }, []);
 
-  // Carregar mais transações (scroll infinito)
   const loadMore = useCallback(() => {
     if (isLoadingMore || !hasMore || isLoading) return;
     loadTransactions(currentPage + 1, true);
   }, [currentPage, hasMore, isLoadingMore, isLoading, loadTransactions]);
 
-  // Efeito para carregar transações quando os filtros mudarem
   useEffect(() => {
     loadTransactions(1, false);
     loadSummary();

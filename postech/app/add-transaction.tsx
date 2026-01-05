@@ -14,7 +14,7 @@ import {
   ActivityIndicator,
   Modal,
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { TransactionType, TransactionCategory } from '@/types/transaction';
 import { API_ENDPOINTS } from '@/config/api';
@@ -46,6 +46,10 @@ const CATEGORY_ICONS: Record<TransactionCategory, string> = {
 
 export default function AddTransactionScreen() {
   const router = useRouter();
+  const params = useLocalSearchParams();
+  const transactionId = params.id as string | undefined;
+  const isEditing = !!transactionId;
+  
   const [transactionType, setTransactionType] = useState<TransactionType>('expense');
   const [title, setTitle] = useState('');
   const [amount, setAmount] = useState('');
@@ -53,17 +57,14 @@ export default function AddTransactionScreen() {
   const [category, setCategory] = useState<TransactionCategory>('outros');
   const [showCategoryModal, setShowCategoryModal] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
 
   const formatCurrency = (value: string) => {
-    // Remove tudo que não é número
     const numbers = value.replace(/\D/g, '');
-    
+  
     if (numbers === '') return '';
-    
-    // Converte para número e divide por 100 para ter centavos
     const amount = parseFloat(numbers) / 100;
     
-    // Formata como moeda brasileira
     return new Intl.NumberFormat('pt-BR', {
       style: 'currency',
       currency: 'BRL',
@@ -72,7 +73,6 @@ export default function AddTransactionScreen() {
   };
 
   const handleAmountChange = (text: string) => {
-    // Remove formatação anterior
     const numbers = text.replace(/\D/g, '');
     
     if (numbers === '') {
@@ -80,21 +80,17 @@ export default function AddTransactionScreen() {
       return;
     }
     
-    // Formata como moeda
     const formatted = formatCurrency(numbers);
     setAmount(formatted);
   };
 
   const formatDate = (text: string): string => {
-    // Remove tudo que não é número
     const numbers = text.replace(/\D/g, '');
     
     if (numbers === '') return '';
     
-    // Limita a 8 dígitos (DDMMYYYY)
     const limited = numbers.slice(0, 8);
     
-    // Formata como DD/MM/YYYY
     if (limited.length <= 2) {
       return limited;
     } else if (limited.length <= 4) {
@@ -114,19 +110,17 @@ export default function AddTransactionScreen() {
       return null;
     }
     
-    // Formato esperado: DD/MM/YYYY
     const parts = dateString.split('/');
     if (parts.length !== 3) return null;
     
     const day = parseInt(parts[0], 10);
-    const month = parseInt(parts[1], 10) - 1; // Mês é 0-indexed
+    const month = parseInt(parts[1], 10) - 1;
     const year = parseInt(parts[2], 10);
     
     if (isNaN(day) || isNaN(month) || isNaN(year)) return null;
     
     const date = new Date(year, month, day);
     
-    // Valida se a data é válida
     if (
       date.getDate() !== day ||
       date.getMonth() !== month ||
@@ -151,11 +145,44 @@ export default function AddTransactionScreen() {
     return ['alimentacao', 'transporte', 'saude', 'educacao', 'lazer', 'moradia', 'outros'];
   };
 
-  // Ajusta categoria quando o tipo muda
+  useEffect(() => {
+    if (transactionId && !isLoading) {
+      setIsLoading(true);
+      fetch(`${API_ENDPOINTS.transactions}/${transactionId}`)
+        .then((res) => res.json())
+        .then((data) => {
+          setTransactionType(data.type);
+          setTitle(data.description);
+          // formata o valor como moeda
+          const formattedAmount = new Intl.NumberFormat('pt-BR', {
+            style: 'currency',
+            currency: 'BRL',
+            minimumFractionDigits: 2,
+          }).format(data.amount);
+          setAmount(formattedAmount);
+          // formata a data como DD/MM/YYYY
+          const transactionDate = new Date(data.date);
+          const day = String(transactionDate.getDate()).padStart(2, '0');
+          const month = String(transactionDate.getMonth() + 1).padStart(2, '0');
+          const year = transactionDate.getFullYear();
+          setDate(`${day}/${month}/${year}`);
+          setCategory(data.category);
+        })
+        .catch((error) => {
+          console.error('Erro ao carregar transação:', error);
+          Alert.alert('Erro', 'Não foi possível carregar a transação.');
+          router.back();
+        })
+        .finally(() => setIsLoading(false));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [transactionId]);
+
+  // ajusta categoria quando o tipo muda
   useEffect(() => {
     const availableCategories = getAvailableCategories();
     if (!availableCategories.includes(category)) {
-      // Se a categoria atual não é válida para o novo tipo, muda para a primeira disponível
+      // se a categoria atual não é válida para o novo tipo, muda para a primeira disponível
       setCategory(availableCategories[0]);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -183,9 +210,7 @@ export default function AddTransactionScreen() {
       Alert.alert('Erro', 'Data inválida. Use o formato DD/MM/YYYY');
       return;
     }
-
-    if (isSaving) return; // Previne múltiplos cliques
-
+    if (isSaving) return;
     setIsSaving(true);
 
     try {
@@ -196,11 +221,16 @@ export default function AddTransactionScreen() {
         type: transactionType,
         category: category,
         date: transactionDate.toISOString(),
-        createdAt: now.toISOString(),
+        ...(isEditing ? {} : { createdAt: now.toISOString() }),
       };
 
-      const response = await fetch(API_ENDPOINTS.transactions, {
-        method: 'POST',
+      const url = isEditing
+        ? `${API_ENDPOINTS.transactions}/${transactionId}`
+        : API_ENDPOINTS.transactions;
+      const method = isEditing ? 'PUT' : 'POST';
+
+      const response = await fetch(url, {
+        method: method,
         headers: {
           'Content-Type': 'application/json',
         },
@@ -208,16 +238,16 @@ export default function AddTransactionScreen() {
       });
 
       if (!response.ok) {
-        throw new Error(`Erro ao salvar: ${response.status}`);
+        throw new Error(`Erro ao ${isEditing ? 'atualizar' : 'salvar'}: ${response.status}`);
       }
 
-      // Usa replace para evitar loops e forçar reload limpo
-      router.replace('/transactions?refresh=' + Date.now());
+      const dataAtual = Date.now();
+      router.replace({ pathname: '/transactions', params: { refresh: String(dataAtual) } });
     } catch (error) {
-      console.error('Erro ao salvar transação:', error);
+      console.error(`Erro ao ${isEditing ? 'atualizar' : 'salvar'} transação:`, error);
       Alert.alert(
         'Erro',
-        'Não foi possível salvar a transação. Verifique se o servidor está rodando.'
+        `Não foi possível ${isEditing ? 'atualizar' : 'salvar'} a transação. Verifique se o servidor está rodando.`
       );
       setIsSaving(false);
     }
@@ -232,7 +262,7 @@ export default function AddTransactionScreen() {
           <Ionicons name="chevron-back" size={28} color="#fff" />
         </TouchableOpacity>
         <Text style={styles.logoText}>
-          <Text style={{ color: '#fff' }}>Nova Transação</Text>
+          <Text style={{ color: '#fff' }}>{isEditing ? 'Editar Transação' : 'Nova Transação'}</Text>
         </Text>
         <View style={{ width: 28 }} />
       </View>
@@ -246,7 +276,7 @@ export default function AddTransactionScreen() {
           </Text>
 
           <View style={styles.inputContainer}>
-            {/* Seleção de Tipo */}
+            {/* tipo */}
             <Text style={styles.label}>Tipo de Transação</Text>
             <View style={styles.typeSelector}>
               <TouchableOpacity
@@ -290,7 +320,6 @@ export default function AddTransactionScreen() {
               </TouchableOpacity>
             </View>
 
-            {/* Input de Título */}
             <Text style={styles.label}>Título</Text>
             <TextInput
               style={styles.input}
@@ -300,7 +329,7 @@ export default function AddTransactionScreen() {
               maxLength={100}
             />
 
-            {/* Input de Data */}
+            {/* input data */}
             <Text style={styles.label}>Data</Text>
             <TextInput
               style={styles.input}
@@ -311,7 +340,7 @@ export default function AddTransactionScreen() {
               maxLength={10}
             />
 
-            {/* Seleção de Categoria */}
+            {/* categoria */}
             <Text style={styles.label}>Categoria</Text>
             <TouchableOpacity
               style={styles.categorySelector}
@@ -329,7 +358,7 @@ export default function AddTransactionScreen() {
               <Ionicons name="chevron-down" size={20} color="#666" />
             </TouchableOpacity>
 
-            {/* Input de Valor */}
+            {/* valor */}
             <Text style={styles.label}>Valor</Text>
             <TextInput
               style={styles.input}
@@ -341,25 +370,34 @@ export default function AddTransactionScreen() {
             />
           </View>
 
-          {/* Botão de Salvar */}
-          <TouchableOpacity
-            style={[
-              styles.button,
-              (isSaving || !title.trim() || !amount || !date || !category || parseFloat(amount.replace(/\D/g, '')) === 0) &&
-                styles.buttonDisabled,
-            ]}
-            onPress={handleSave}
-            disabled={isSaving || !title.trim() || !amount || !date || !category || parseFloat(amount.replace(/\D/g, '')) === 0}>
-            {isSaving ? (
-              <ActivityIndicator color="#fff" />
-            ) : (
-              <Text style={styles.buttonText}>Salvar Transação</Text>
-            )}
-          </TouchableOpacity>
+          {/* btn salvar */}
+          {isLoading ? (
+            <View style={styles.loadingContainer}>
+              <ActivityIndicator size="large" color={THEME_COLOR} />
+              <Text style={styles.loadingText}>Carregando transação...</Text>
+            </View>
+          ) : (
+            <TouchableOpacity
+              style={[
+                styles.button,
+                (isSaving || !title.trim() || !amount || !date || !category || parseFloat(amount.replace(/\D/g, '')) === 0) &&
+                  styles.buttonDisabled,
+              ]}
+              onPress={handleSave}
+              disabled={isSaving || !title.trim() || !amount || !date || !category || parseFloat(amount.replace(/\D/g, '')) === 0}>
+              {isSaving ? (
+                <ActivityIndicator color="#fff" />
+              ) : (
+                <Text style={styles.buttonText}>
+                  {isEditing ? 'Atualizar Transação' : 'Salvar Transação'}
+                </Text>
+              )}
+            </TouchableOpacity>
+          )}
         </ScrollView>
       </KeyboardAvoidingView>
 
-      {/* Modal de Seleção de Categoria */}
+      {/* modal categoria */}
       <Modal
         visible={showCategoryModal}
         animationType="slide"
@@ -585,5 +623,16 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 18,
     fontWeight: 'bold',
+  },
+  loadingContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 40,
+    marginTop: 20,
+  },
+  loadingText: {
+    marginTop: 12,
+    fontSize: 16,
+    color: '#666',
   },
 });
