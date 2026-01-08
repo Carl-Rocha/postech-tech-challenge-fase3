@@ -34,6 +34,9 @@ export default function HomeScreen() {
                 <Text style={{color: '#fff'}}>Byte</Text>
                 <Text style={{color: THEME_COLOR}}>bank</Text>
             </Text>
+            <TouchableOpacity onPress={() => router.push('/transactions')}>
+                <Ionicons name="wallet" size={28} color="#EF6C4D" />
+            </TouchableOpacity>
         </View>
 
         <View style={styles.heroSection}>
@@ -71,6 +74,16 @@ export default function HomeScreen() {
                 <Text style={styles.featureName}>Seguro Dispositivos</Text>
                 <Text style={styles.featureDesc}>Seus dispositivos móveis protegidos.</Text>
             </View>
+        </View>
+
+        <View style={styles.quickAccessSection}>
+            <TouchableOpacity 
+                style={styles.quickAccessButton}
+                onPress={() => router.push('/transactions')}
+            >
+                <Ionicons name="list" size={24} color="#fff" />
+                <Text style={styles.quickAccessText}>Ver Transações</Text>
+            </TouchableOpacity>
         </View>
 
         <Footer />
@@ -183,5 +196,27 @@ const styles = StyleSheet.create({
         color: '#666',
         textAlign: 'center',
         lineHeight: 20,
+    },
+    quickAccessSection: {
+        backgroundColor: '#fff',
+        padding: 24,
+        alignItems: 'center',
+    },
+    quickAccessButton: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: THEME_COLOR,
+        paddingVertical: 16,
+        paddingHorizontal: 32,
+        borderRadius: 12,
+        gap: 12,
+        width: '100%',
+        maxWidth: 300,
+    },
+    quickAccessText: {
+        color: '#fff',
+        fontSize: 16,
+        fontWeight: 'bold',
     },
 });
