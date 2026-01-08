@@ -16,6 +16,39 @@ This is an [Expo](https://expo.dev) project created with [`create-expo-app`](htt
    npx expo start
    ```
 
+## Android (one command, fixed port)
+
+After the dev build is installed once, you can run everything with:
+
+```bash
+npm run start:android
+```
+
+## Firebase setup
+
+1. Create a Firebase project and enable Email/Password authentication.
+2. Create a Cloud Firestore database and a Storage bucket.
+3. Copy your Firebase config into `app.json` under `expo.extra.firebase`:
+
+   ```json
+   {
+     "expo": {
+       "extra": {
+         "firebase": {
+           "apiKey": "YOUR_API_KEY",
+           "authDomain": "YOUR_PROJECT.firebaseapp.com",
+           "projectId": "YOUR_PROJECT_ID",
+           "storageBucket": "YOUR_PROJECT.appspot.com",
+           "messagingSenderId": "YOUR_SENDER_ID",
+           "appId": "YOUR_APP_ID"
+         }
+       }
+     }
+   }
+   ```
+
+4. Start the app and create an account in the signup screen.
+
 In the output, you'll find options to open the app in a
 
 - [development build](https://docs.expo.dev/develop/development-builds/introduction/)

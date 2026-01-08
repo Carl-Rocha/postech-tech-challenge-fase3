@@ -15,7 +15,21 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router'; // Para navegação
 import { useFormik } from 'formik'; // Para gerenciar o formulário
-import * as Yup from 'yup'; // Para as regras de validação
+import * as Yup from 'yup';
+import { createUserWithEmailAndPassword, updateProfile } from 'firebase/auth';
+import { doc, serverTimestamp, setDoc } from 'firebase/firestore';
+import { auth, db } from '../services/firebase';
+
+const getAuthErrorMessage = (error: unknown) => {
+  if (error && typeof error === 'object' && 'code' in error) {
+    const code = String((error as { code?: string }).code);
+    if (code === 'auth/email-already-in-use') return 'Email ja cadastrado.';
+    if (code === 'auth/invalid-email') return 'Email invalido.';
+    if (code === 'auth/weak-password') return 'Senha fraca. Use pelo menos 6 caracteres.';
+  }
+
+  return 'Nao foi possivel criar a conta. Tente novamente.';
+};
 
 export default function SignupScreen() {
   const router = useRouter();
@@ -47,10 +61,24 @@ export default function SignupScreen() {
       agreeTerms: false,
     },
     validationSchema: validationSchema,
-    onSubmit: (values) => {
-      // Ação ao clicar em "Criar conta" com tudo válido
-      Alert.alert("Sucesso", "Conta criada!\n" + JSON.stringify(values));
-      console.log('Enviado:', values);
+    onSubmit: async (values, { setSubmitting }) => {
+      try {
+        const email = values.email.trim();
+        const name = values.name.trim();
+        const credential = await createUserWithEmailAndPassword(auth, email, values.password);
+        await updateProfile(credential.user, { displayName: name });
+        await setDoc(doc(db, 'users', credential.user.uid), {
+          name,
+          email,
+          createdAt: serverTimestamp(),
+        });
+        Alert.alert('Sucesso', 'Conta criada!');
+        router.replace('/(tabs)');
+      } catch (error) {
+        Alert.alert('Erro', getAuthErrorMessage(error));
+      } finally {
+        setSubmitting(false);
+      }
     },
   });
 
@@ -155,8 +183,9 @@ export default function SignupScreen() {
           </View>
 
           <TouchableOpacity 
-            style={[styles.button, !formik.isValid && styles.buttonDisabled]} 
+            style={[styles.button, (!formik.isValid || formik.isSubmitting) && styles.buttonDisabled]} 
             onPress={() => formik.handleSubmit()}
+            disabled={formik.isSubmitting}
           >
             <Text style={styles.buttonText}>Criar conta</Text>
           </TouchableOpacity>
