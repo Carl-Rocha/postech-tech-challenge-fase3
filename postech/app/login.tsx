@@ -16,6 +16,21 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter, Link } from 'expo-router'; 
 import { useFormik } from 'formik'; 
 import * as Yup from 'yup'; 
+import { signInWithEmailAndPassword } from 'firebase/auth';
+import { auth } from '../services/firebase';
+
+const getAuthErrorMessage = (error: unknown) => {
+  if (error && typeof error === 'object' && 'code' in error) {
+    const code = String((error as { code?: string }).code);
+    if (code === 'auth/invalid-email') return 'Email invalido.';
+    if (code === 'auth/user-not-found') return 'Usuario nao encontrado.';
+    if (code === 'auth/wrong-password') return 'Senha incorreta.';
+    if (code === 'auth/invalid-credential') return 'Credenciais invalidas.';
+    if (code === 'auth/too-many-requests') return 'Muitas tentativas. Tente novamente depois.';
+  }
+
+  return 'Nao foi possivel entrar. Tente novamente.';
+};
 
 export default function LoginScreen() {
   const router = useRouter();
@@ -37,11 +52,17 @@ export default function LoginScreen() {
       password: '',
     },
     validationSchema: validationSchema,
-    onSubmit: (values) => {
-      Alert.alert("Login", "Login realizado com sucesso!\n" + JSON.stringify(values));
-      console.log('Login Values:', values);
-      
-      //  router.replace('/(tabs)/home'); // Redirecionar para home após login
+    onSubmit: async (values, { setSubmitting }) => {
+      try {
+        const email = values.email.trim();
+        await signInWithEmailAndPassword(auth, email, values.password);
+        Alert.alert('Login', 'Login realizado com sucesso!');
+        router.replace('/');
+      } catch (error) {
+        Alert.alert('Erro no login', getAuthErrorMessage(error));
+      } finally {
+        setSubmitting(false);
+      }
     },
   });
 
@@ -114,8 +135,9 @@ export default function LoginScreen() {
           </View>
 
           <TouchableOpacity 
-            style={[styles.button, !formik.isValid && styles.buttonDisabled]} 
+            style={[styles.button, (!formik.isValid || formik.isSubmitting) && styles.buttonDisabled]} 
             onPress={() => formik.handleSubmit()}
+            disabled={formik.isSubmitting}
           >
             <Text style={styles.buttonText}>Entrar</Text>
           </TouchableOpacity>

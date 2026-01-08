@@ -47,6 +47,14 @@
     },
     "extra": {
       "router": {},
+      "firebase": {
+        "apiKey": "AIzaSyAP1v_XqT3gwRxl3chsLvAYkXvPG5gsO3Y",
+        "authDomain": "postech-fase-3.firebaseapp.com",
+        "projectId": "postech-fase-3",
+        "storageBucket": "postech-fase-3.firebasestorage.app",
+        "messagingSenderId": "835966693874",
+        "appId": "1:835966693874:web:182adf7fb2574f45613b6b"
+      },
       "eas": {
         "projectId": "53193ea2-fe49-4c72-9f21-68bd7454d84e"
       }
