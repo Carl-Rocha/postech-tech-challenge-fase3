@@ -1,4 +1,4 @@
-import React from 'react';
+﻿import React from 'react';
 import { 
   StyleSheet, 
   Text, 
@@ -48,7 +48,7 @@ export default function ErrorScreen() {
           
           <View style={styles.textWrapper}>
               <Text style={styles.title}>
-                Ops! Não encontramos a página...
+                Ops! Nao encontramos a pagina...
               </Text>
               
               <Text style={styles.description}>
@@ -58,7 +58,7 @@ export default function ErrorScreen() {
           </View>
 
           <TouchableOpacity style={styles.button} onPress={handleBackToHome}>
-            <Text style={styles.buttonText}>Voltar ao início</Text>
+            <Text style={styles.buttonText}>Voltar ao inicio</Text>
           </TouchableOpacity>
 
           <View style={styles.illustrationContainer}>
@@ -101,7 +101,7 @@ const styles = StyleSheet.create({
     fontSize: 22,
     fontWeight: 'bold',
   },
-  // Wrapper para separar o conteúdo do footer
+  // Wrapper para separar o conteudo do footer
   contentWrapper: {
     paddingHorizontal: 24,
     paddingTop: 40,
@@ -165,3 +165,4 @@ const styles = StyleSheet.create({
     zIndex: 1,
   }
 });
+

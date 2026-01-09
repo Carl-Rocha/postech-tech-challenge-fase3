@@ -1,11 +1,11 @@
 {
   "expo": {
-    "name": "postech",
-    "slug": "postech",
+    "name": "Byte Bank",
+    "slug": "byte-bank",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "postech",
+    "scheme": "bytebank",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
@@ -56,7 +56,7 @@
         "appId": "1:835966693874:web:182adf7fb2574f45613b6b"
       },
       "eas": {
-        "projectId": "53193ea2-fe49-4c72-9f21-68bd7454d84e"
+        "projectId": "6a58d9be-aeb5-4d2a-b614-e47a6e8bc04c"
       }
     }
   }

@@ -1,4 +1,4 @@
-import React from "react";
+﻿import React, { useState } from "react";
 import {
   StyleSheet,
   Text,
@@ -11,12 +11,13 @@ import {
   KeyboardAvoidingView,
   Platform,
   Alert,
+  ActivityIndicator,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter, Link } from "expo-router";
 import { useFormik } from "formik";
 import * as Yup from "yup";
-import { signInWithEmailAndPassword } from "firebase/auth";
+import { signInWithEmailAndPassword, sendPasswordResetEmail } from "firebase/auth";
 import { auth } from "../services/firebase";
 
 const getAuthErrorMessage = (error: unknown) => {
@@ -35,17 +36,16 @@ const getAuthErrorMessage = (error: unknown) => {
 
 export default function LoginScreen() {
   const router = useRouter();
+  const [isResetting, setIsResetting] = useState(false);
 
-  // 1. Configuração das Regras de Validação
   const validationSchema = Yup.object().shape({
     email: Yup.string()
-      .email("Digite um email válido")
-      .required("Email é obrigatório"),
+      .email("Digite um email valido")
+      .required("Email e obrigatorio"),
 
-    password: Yup.string().required("Senha é obrigatória"),
+    password: Yup.string().required("Senha e obrigatoria"),
   });
 
-  // 2. Configuração do Formik
   const formik = useFormik({
     initialValues: {
       email: "",
@@ -57,7 +57,7 @@ export default function LoginScreen() {
         const email = values.email.trim();
         await signInWithEmailAndPassword(auth, email, values.password);
         Alert.alert("Login", "Login realizado com sucesso!");
-        router.replace("/(tabs)");
+        router.replace("/transactions");
       } catch (error) {
         Alert.alert("Erro no login", getAuthErrorMessage(error));
       } finally {
@@ -65,6 +65,26 @@ export default function LoginScreen() {
       }
     },
   });
+
+  const handleForgotPassword = async () => {
+    if (isResetting) return;
+    const email = formik.values.email.trim();
+    if (!email) {
+      Alert.alert("Recuperar senha", "Informe seu email para receber o link.");
+      return;
+    }
+
+    setIsResetting(true);
+    try {
+      await validationSchema.validateAt("email", { email });
+      await sendPasswordResetEmail(auth, email);
+      Alert.alert("Recuperar senha", "Enviamos um link para seu email.");
+    } catch (error) {
+      Alert.alert("Recuperar senha", getAuthErrorMessage(error));
+    } finally {
+      setIsResetting(false);
+    }
+  };
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -129,8 +149,20 @@ export default function LoginScreen() {
           </View>
 
           <View style={styles.forgotPasswordContainer}>
-            <TouchableOpacity onPress={() => console.log("Recuperar senha")}>
-              <Text style={styles.forgotPasswordText}>Esqueci a senha!</Text>
+            <TouchableOpacity
+              onPress={handleForgotPassword}
+              disabled={isResetting}
+              style={[
+                styles.forgotPasswordButton,
+                isResetting && styles.forgotPasswordButtonDisabled,
+              ]}
+            >
+              {isResetting && (
+                <ActivityIndicator size="small" color="#6DBF58" />
+              )}
+              <Text style={styles.forgotPasswordText}>
+                {isResetting ? "Enviando..." : "Esqueci a senha!"}
+              </Text>
             </TouchableOpacity>
           </View>
 
@@ -146,7 +178,7 @@ export default function LoginScreen() {
           </TouchableOpacity>
 
           <View style={styles.footerContainer}>
-            <Text style={styles.footerText}>Ainda não tem conta? </Text>
+            <Text style={styles.footerText}>Ainda nao tem conta? </Text>
             <Link href="/signup" style={styles.footerLink}>
               Criar conta
             </Link>
@@ -217,6 +249,14 @@ const styles = StyleSheet.create({
   forgotPasswordContainer: {
     alignItems: "flex-start",
     marginBottom: 30,
+  },
+  forgotPasswordButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  forgotPasswordButtonDisabled: {
+    opacity: 0.7,
   },
   forgotPasswordText: {
     color: "#6DBF58",

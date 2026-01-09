@@ -1,128 +1,98 @@
-import { useState, useEffect, useCallback } from 'react';
+﻿import { useState, useEffect, useCallback, useRef } from 'react';
 import { Transaction, TransactionFilters, TransactionSummary } from '@/types/transaction';
-import { API_ENDPOINTS } from '@/config/api';
+import {
+  collection,
+  getCountFromServer,
+  getDocs,
+  orderBy,
+  query,
+  startAfter,
+  where,
+  limit,
+  QueryDocumentSnapshot,
+  DocumentData,
+  Timestamp,
+} from 'firebase/firestore';
+import { db } from '@/services/firebase';
 
 const ITEMS_PER_PAGE = 20;
 
-const parseDate = (dateString: string | Date): Date => {
-  if (dateString instanceof Date) return dateString;
-  return new Date(dateString);
+const parseDate = (value: unknown): Date => {
+  if (value instanceof Date) return value;
+  if (value instanceof Timestamp) return value.toDate();
+  if (typeof value === 'string') return new Date(value);
+  return new Date();
 };
 
-const formatDateForQuery = (date: Date): string => {
-  return date.toISOString().split('T')[0];
-};
+const buildBaseQuery = (filters: TransactionFilters, userId: string) => {
+  let q = query(collection(db, 'transactions'), where('userId', '==', userId));
 
-// construir query string de filtros
-const buildQueryString = (filters: TransactionFilters, page: number, limit: number): string => {
-  const params = new URLSearchParams();
-  
-  if (filters.startDate) {
-    params.append('date_gte', formatDateForQuery(filters.startDate));
-  }
-  if (filters.endDate) {
-    params.append('date_lte', formatDateForQuery(filters.endDate));
+  if (filters.type) {
+    q = query(q, where('type', '==', filters.type));
   }
   if (filters.category) {
-    params.append('category', filters.category);
+    q = query(q, where('category', '==', filters.category));
   }
-  if (filters.type) {
-    params.append('type', filters.type);
+  if (filters.startDate) {
+    q = query(q, where('date', '>=', filters.startDate));
   }
-  if (filters.search) {
-    params.append('q', filters.search);
+  if (filters.endDate) {
+    q = query(q, where('date', '<=', filters.endDate));
   }
-  
-  params.append('_page', page.toString());
-  params.append('_limit', limit.toString());
-  params.append('_sort', 'date');
-  params.append('_order', 'desc');
-  
-  return params.toString();
+
+  return query(q, orderBy('date', 'desc'));
 };
 
-// buscar transacoes
-const fetchTransactions = async (
+const mapDocToTransaction = (docSnap: QueryDocumentSnapshot<DocumentData>): Transaction => {
+  const data = docSnap.data();
+  return {
+    id: docSnap.id,
+    description: String(data.description || ''),
+    amount: Number(data.amount || 0),
+    type: data.type,
+    category: data.category,
+    date: parseDate(data.date),
+    createdAt: parseDate(data.createdAt),
+    imageUri: data.imageUri,
+    imageType: data.imageType,
+    fileName: data.fileName,
+  };
+};
+
+const fetchTransactionPage = async (
   filters: TransactionFilters,
-  page: number
-): Promise<{ data: Transaction[]; total: number }> => {
-  try {
-    const queryString = buildQueryString(filters, page, ITEMS_PER_PAGE);
-    const url = `${API_ENDPOINTS.transactions}?${queryString}`;
-    
-    const response = await fetch(url);
-    
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
-    }
-    
-    const data: Transaction[] = await response.json();
-    const total = response.headers.get('X-Total-Count') 
-      ? parseInt(response.headers.get('X-Total-Count') || '0', 10)
-      : data.length;
-    
-    const transactions = data.map((transaction) => ({
-      ...transaction,
-      date: parseDate(transaction.date),
-      createdAt: parseDate(transaction.createdAt),
-    }));
-    
-    return { data: transactions, total };
-  } catch (error) {
-    console.error('Error fetching transactions:', error);
-    throw error;
+  userId: string,
+  lastDoc: QueryDocumentSnapshot<DocumentData> | null
+): Promise<{
+  data: Transaction[];
+  lastVisible: QueryDocumentSnapshot<DocumentData> | null;
+}> => {
+  let q = buildBaseQuery(filters, userId);
+  q = query(q, limit(ITEMS_PER_PAGE));
+  if (lastDoc) {
+    q = query(q, startAfter(lastDoc));
   }
+
+  const snapshot = await getDocs(q);
+  const data = snapshot.docs.map(mapDocToTransaction);
+  const lastVisible = snapshot.docs[snapshot.docs.length - 1] ?? null;
+  return { data, lastVisible };
 };
 
-// buscar todas as transacoes (para calculo)
-const fetchAllTransactions = async (filters: TransactionFilters): Promise<Transaction[]> => {
-  try {
-    const params = new URLSearchParams();
-    
-    if (filters.startDate) {
-      params.append('date_gte', formatDateForQuery(filters.startDate));
-    }
-    if (filters.endDate) {
-      params.append('date_lte', formatDateForQuery(filters.endDate));
-    }
-    if (filters.category) {
-      params.append('category', filters.category);
-    }
-    if (filters.type) {
-      params.append('type', filters.type);
-    }
-    
-    const url = `${API_ENDPOINTS.transactions}?${params.toString()}&_sort=date&_order=desc`;
-    
-    const response = await fetch(url);
-    
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
-    }
-    
-    const data: Transaction[] = await response.json();
-    
-    const transactions = data.map((transaction) => ({
-      ...transaction,
-      date: parseDate(transaction.date),
-      createdAt: parseDate(transaction.createdAt),
-    }));
-    
-    if (filters.search) {
-      const searchLower = filters.search.toLowerCase();
-      return transactions.filter((transaction) =>
-        transaction.description.toLowerCase().includes(searchLower)
-      );
-    }
-    
-    return transactions;
-  } catch (error) {
-    console.error('Error fetching all transactions:', error);
-    throw error;
-  }
+const fetchTransactionsCount = async (filters: TransactionFilters, userId: string): Promise<number> => {
+  const q = buildBaseQuery(filters, userId);
+  const snapshot = await getCountFromServer(q);
+  return snapshot.data().count;
 };
 
-export function useTransactions(initialFilters?: TransactionFilters) {
+// buscar todas as transacoes (para calculo e busca local)
+const fetchAllTransactions = async (filters: TransactionFilters, userId: string): Promise<Transaction[]> => {
+  const q = buildBaseQuery(filters, userId);
+  const snapshot = await getDocs(q);
+  return snapshot.docs.map(mapDocToTransaction);
+};
+
+export function useTransactions(userId?: string | null, initialFilters?: TransactionFilters) {
   const [displayedTransactions, setDisplayedTransactions] = useState<Transaction[]>([]);
   const [filters, setFilters] = useState<TransactionFilters>(initialFilters || {});
   const [currentPage, setCurrentPage] = useState(1);
@@ -136,6 +106,8 @@ export function useTransactions(initialFilters?: TransactionFilters) {
     totalExpense: 0,
   });
   const [error, setError] = useState<string | null>(null);
+  const lastDocRef = useRef<QueryDocumentSnapshot<DocumentData> | null>(null);
+  const searchCacheRef = useRef<Transaction[] | null>(null);
 
   const calculateSummary = useCallback((transactions: Transaction[]): TransactionSummary => {
     const income = transactions
@@ -153,14 +125,61 @@ export function useTransactions(initialFilters?: TransactionFilters) {
     };
   }, []);
 
+  const resetState = useCallback(() => {
+    setDisplayedTransactions([]);
+    setSummary({ totalBalance: 0, totalIncome: 0, totalExpense: 0 });
+    setTotalCount(0);
+    setHasMore(false);
+    setCurrentPage(1);
+    setError(null);
+    setIsLoading(false);
+    setIsLoadingMore(false);
+    lastDocRef.current = null;
+    searchCacheRef.current = null;
+  }, []);
+
   const loadTransactions = useCallback(
     async (page: number, append: boolean = false) => {
+      if (!userId) {
+        resetState();
+        return;
+      }
+
       const loadingState = page === 1 ? setIsLoading : setIsLoadingMore;
       loadingState(true);
       setError(null);
 
       try {
-        const { data, total } = await fetchTransactions(filters, page);
+        if (filters.search) {
+          if (!searchCacheRef.current || page === 1) {
+            const allTransactions = await fetchAllTransactions(filters, userId);
+            const searchLower = filters.search.toLowerCase();
+            searchCacheRef.current = allTransactions.filter((transaction) =>
+              transaction.description.toLowerCase().includes(searchLower)
+            );
+          }
+
+          const filtered = searchCacheRef.current || [];
+          const sliceEnd = page * ITEMS_PER_PAGE;
+          const sliced = filtered.slice(0, sliceEnd);
+          setDisplayedTransactions(sliced);
+          setTotalCount(filtered.length);
+          setHasMore(sliced.length < filtered.length);
+          setCurrentPage(page);
+          return;
+        }
+
+        if (page === 1) {
+          lastDocRef.current = null;
+          searchCacheRef.current = null;
+        }
+
+        const { data, lastVisible } = await fetchTransactionPage(
+          filters,
+          userId,
+          append ? lastDocRef.current : null
+        );
+        lastDocRef.current = lastVisible;
 
         if (append) {
           setDisplayedTransactions((prev) => [...prev, ...data]);
@@ -168,34 +187,53 @@ export function useTransactions(initialFilters?: TransactionFilters) {
           setDisplayedTransactions(data);
         }
 
-        setTotalCount(total);
-        setHasMore(data.length === ITEMS_PER_PAGE && displayedTransactions.length + data.length < total);
+        if (page === 1) {
+          const total = await fetchTransactionsCount(filters, userId);
+          setTotalCount(total);
+          setHasMore(data.length === ITEMS_PER_PAGE && data.length < total);
+        } else {
+          const nextLength = displayedTransactions.length + data.length;
+          setHasMore(data.length === ITEMS_PER_PAGE && nextLength < totalCount);
+        }
+
         setCurrentPage(page);
       } catch (err) {
-        setError(err instanceof Error ? err.message : 'Erro ao carregar transações');
+        setError(err instanceof Error ? err.message : 'Erro ao carregar transacoes');
         console.error('Error loading transactions:', err);
       } finally {
         loadingState(false);
       }
     },
-    [filters, displayedTransactions.length]
+    [filters, displayedTransactions.length, totalCount, userId, resetState]
   );
 
   const loadSummary = useCallback(async () => {
+    if (!userId) {
+      setSummary({ totalBalance: 0, totalIncome: 0, totalExpense: 0 });
+      return;
+    }
+
     try {
-      const allTransactions = await fetchAllTransactions(filters);
-      const calculatedSummary = calculateSummary(allTransactions);
+      const allTransactions = await fetchAllTransactions(filters, userId);
+      const filteredTransactions = filters.search
+        ? allTransactions.filter((transaction) =>
+            transaction.description.toLowerCase().includes(filters.search!.toLowerCase())
+          )
+        : allTransactions;
+      const calculatedSummary = calculateSummary(filteredTransactions);
       setSummary(calculatedSummary);
     } catch (err) {
       console.error('Error loading summary:', err);
     }
-  }, [filters, calculateSummary]);
+  }, [filters, calculateSummary, userId]);
 
   const updateFilters = useCallback((newFilters: TransactionFilters) => {
     setFilters(newFilters);
     setCurrentPage(1);
     setDisplayedTransactions([]);
     setHasMore(true);
+    lastDocRef.current = null;
+    searchCacheRef.current = null;
   }, []);
 
   const loadMore = useCallback(() => {
@@ -204,9 +242,14 @@ export function useTransactions(initialFilters?: TransactionFilters) {
   }, [currentPage, hasMore, isLoadingMore, isLoading, loadTransactions]);
 
   useEffect(() => {
+    if (!userId) {
+      resetState();
+      return;
+    }
+
     loadTransactions(1, false);
     loadSummary();
-  }, [filters, loadTransactions, loadSummary]);
+  }, [filters, loadTransactions, loadSummary, userId, resetState]);
 
   return {
     transactions: displayedTransactions,
@@ -223,6 +266,8 @@ export function useTransactions(initialFilters?: TransactionFilters) {
       setCurrentPage(1);
       setDisplayedTransactions([]);
       setHasMore(true);
+      lastDocRef.current = null;
+      searchCacheRef.current = null;
       loadTransactions(1, false);
       loadSummary();
     },

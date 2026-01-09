@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useRef } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   View,
   Text,
@@ -12,9 +12,10 @@ import {
   Modal,
   ActivityIndicator,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { useTransactions } from '@/hooks/useTransactions';
+import { useTransactionsContext } from '@/context/TransactionsContext';
 import { Transaction, TransactionCategory, TransactionType } from '@/types/transaction';
 
 const THEME_COLOR = '#EF6C4D';
@@ -45,6 +46,7 @@ const CATEGORY_ICONS: Record<TransactionCategory, string> = {
 export default function TransactionsScreen() {
   const router = useRouter();
   const params = useLocalSearchParams();
+  const insets = useSafeAreaInsets();
   const [showFilters, setShowFilters] = useState(false);
   const [searchText, setSearchText] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<TransactionCategory | undefined>();
@@ -63,7 +65,7 @@ export default function TransactionsScreen() {
     totalCount,
     error,
     refetch,
-  } = useTransactions();
+  } = useTransactionsContext();
 
   React.useEffect(() => {
     if (params.refresh) {
@@ -200,7 +202,7 @@ export default function TransactionsScreen() {
     <SafeAreaView style={styles.safeArea}>
       <StatusBar barStyle="light-content" backgroundColor={HEADER_BG} />
 
-      <View style={styles.header}>
+      <View style={[styles.header, { paddingTop: Math.max(insets.top, 12) }]}>
         <TouchableOpacity onPress={() => router.push('/')}>
           <Ionicons name="chevron-back" size={28} color="#fff" />
         </TouchableOpacity>

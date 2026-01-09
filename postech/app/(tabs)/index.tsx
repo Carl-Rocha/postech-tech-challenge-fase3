@@ -1,4 +1,4 @@
-import React from 'react';
+﻿import React from 'react';
 import { 
   View, 
   Text, 
@@ -9,6 +9,7 @@ import {
   SafeAreaView, 
   StatusBar 
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import Footer from '../Footer';
@@ -19,6 +20,7 @@ const HEADER_BG = '#000';
 
 export default function HomeScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -26,7 +28,7 @@ export default function HomeScreen() {
       
       <ScrollView contentContainerStyle={styles.scrollContent} bounces={false}>
         
-        <View style={styles.header}>
+        <View style={[styles.header, { paddingTop: Math.max(insets.top, 12) }]}>
             <TouchableOpacity>
                 <Ionicons name="menu" size={28} color="#EF6C4D" />
             </TouchableOpacity>
@@ -47,7 +49,7 @@ export default function HomeScreen() {
                   <Text style={styles.btnPrimaryText}>Abrir conta</Text>
               </TouchableOpacity>
               <TouchableOpacity style={styles.btnSecondary} onPress={() => router.push('/login')}>
-                  <Text style={styles.btnSecondaryText}>Já tenho conta</Text>
+                  <Text style={styles.btnSecondaryText}>Ja tenho conta</Text>
               </TouchableOpacity>
            </View>
         </View>
@@ -56,23 +58,23 @@ export default function HomeScreen() {
             <Text style={styles.featuresTitle}>Vantagens do nosso banco:</Text>
             <View style={styles.featureItem}>
                 <Ionicons name="gift-outline" size={40} color={THEME_COLOR} style={styles.featureIcon} />
-                <Text style={styles.featureName}>Conta e cartão gratuitos</Text>
-                <Text style={styles.featureDesc}>Isso mesmo, nossa conta é digital...</Text>
+                <Text style={styles.featureName}>Conta e cartao gratuitos</Text>
+                <Text style={styles.featureDesc}>Isso mesmo, nossa conta e digital...</Text>
             </View>
             <View style={styles.featureItem}>
                 <Ionicons name="cash-outline" size={40} color={THEME_COLOR} style={styles.featureIcon} />
                 <Text style={styles.featureName}>Saques sem custo</Text>
-                <Text style={styles.featureDesc}>Você pode sacar gratuitamente 4x...</Text>
+                <Text style={styles.featureDesc}>Voce pode sacar gratuitamente 4x...</Text>
             </View>
             <View style={styles.featureItem}>
                 <Ionicons name="star-outline" size={40} color={THEME_COLOR} style={styles.featureIcon} />
                 <Text style={styles.featureName}>Programa de pontos</Text>
-                <Text style={styles.featureDesc}>Você pode acumular pontos...</Text>
+                <Text style={styles.featureDesc}>Voce pode acumular pontos...</Text>
             </View>
             <View style={styles.featureItem}>
                 <Ionicons name="shield-checkmark-outline" size={40} color={THEME_COLOR} style={styles.featureIcon} />
                 <Text style={styles.featureName}>Seguro Dispositivos</Text>
-                <Text style={styles.featureDesc}>Seus dispositivos móveis protegidos.</Text>
+                <Text style={styles.featureDesc}>Seus dispositivos moveis protegidos.</Text>
             </View>
         </View>
 
@@ -82,7 +84,7 @@ export default function HomeScreen() {
                 onPress={() => router.push('/transactions')}
             >
                 <Ionicons name="list" size={24} color="#fff" />
-                <Text style={styles.quickAccessText}>Ver Transações</Text>
+                <Text style={styles.quickAccessText}>Ver Transacoes</Text>
             </TouchableOpacity>
         </View>
 
@@ -220,3 +222,5 @@ const styles = StyleSheet.create({
         fontWeight: 'bold',
     },
 });
+
+

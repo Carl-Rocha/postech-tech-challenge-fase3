@@ -1,12 +1,18 @@
 import { Stack } from 'expo-router';
+import { AuthProvider } from '@/context/AuthContext';
+import { TransactionsProvider } from '@/context/TransactionsContext';
 
 export default function RootLayout() {
   return (
-    <Stack
-      screenOptions={{
-        headerShown: false,
-      }}
-    />
+    <AuthProvider>
+      <TransactionsProvider>
+        <Stack
+          screenOptions={{
+            headerShown: false,
+          }}
+        />
+      </TransactionsProvider>
+    </AuthProvider>
   );
 }
 

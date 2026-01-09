@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+﻿import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -15,24 +15,35 @@ import {
   Modal,
   Image,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
 import { TransactionType, TransactionCategory } from '@/types/transaction';
-import { API_ENDPOINTS } from '@/config/api';
+import { auth, db } from '@/services/firebase';
+import {
+  addDoc,
+  collection,
+  deleteField,
+  doc,
+  getDoc,
+  serverTimestamp,
+  Timestamp,
+  updateDoc,
+} from 'firebase/firestore';
 
 const THEME_COLOR = '#EF6C4D';
 const HEADER_BG = '#000';
 
 const CATEGORY_LABELS: Record<TransactionCategory, string> = {
-  alimentacao: 'Alimentação',
+  alimentacao: 'Alimentacao',
   transporte: 'Transporte',
-  saude: 'Saúde',
-  educacao: 'Educação',
+  saude: 'Saude',
+  educacao: 'Educacao',
   lazer: 'Lazer',
   moradia: 'Moradia',
-  salario: 'Salário',
+  salario: 'Salario',
   outros: 'Outros',
 };
 
@@ -50,6 +61,7 @@ const CATEGORY_ICONS: Record<TransactionCategory, string> = {
 export default function AddTransactionScreen() {
   const router = useRouter();
   const params = useLocalSearchParams();
+  const insets = useSafeAreaInsets();
   const transactionId = params.id as string | undefined;
   const isEditing = !!transactionId;
   
@@ -152,19 +164,16 @@ export default function AddTransactionScreen() {
     return ['alimentacao', 'transporte', 'saude', 'educacao', 'lazer', 'moradia', 'outros'];
   };
 
-  // Função para converter URI para base64
+  // Funcao para converter URI para base64
   const uriToBase64 = async (uri: string): Promise<string> => {
     try {
-      // Se já for base64, retorna direto
       if (uri.startsWith('data:')) {
         return uri;
       }
 
-      // Para web e React Native, usa fetch para ler o arquivo
       const response = await fetch(uri);
       const blob = await response.blob();
       
-      // Usa FileReader se disponível (web e alguns ambientes React Native)
       if (typeof FileReader !== 'undefined') {
         return new Promise((resolve, reject) => {
           const reader = new FileReader();
@@ -175,26 +184,22 @@ export default function AddTransactionScreen() {
           reader.onerror = reject;
           reader.readAsDataURL(blob);
         });
-      } else {
-        // Fallback para ambientes sem FileReader: converte blob para base64 manualmente
-        const arrayBuffer = await blob.arrayBuffer();
-        const uint8Array = new Uint8Array(arrayBuffer);
-        
-        // Converte para string base64 em chunks para evitar problemas com arrays grandes
-        let binary = '';
-        const chunkSize = 8192;
-        for (let i = 0; i < uint8Array.length; i += chunkSize) {
-          const chunk = uint8Array.subarray(i, i + chunkSize);
-          binary += String.fromCharCode.apply(null, Array.from(chunk));
-        }
-        
-        const base64 = btoa(binary);
-        // Determina o tipo MIME baseado na extensão ou usa um padrão
-        const mimeType = uri.endsWith('.pdf') || uri.includes('pdf') 
-          ? 'application/pdf' 
-          : 'image/jpeg';
-        return `data:${mimeType};base64,${base64}`;
       }
+
+      const arrayBuffer = await blob.arrayBuffer();
+      const uint8Array = new Uint8Array(arrayBuffer);
+      let binary = '';
+      const chunkSize = 8192;
+      for (let i = 0; i < uint8Array.length; i += chunkSize) {
+        const chunk = uint8Array.subarray(i, i + chunkSize);
+        binary += String.fromCharCode.apply(null, Array.from(chunk));
+      }
+
+      const base64 = btoa(binary);
+      const mimeType = uri.endsWith('.pdf') || uri.includes('pdf')
+        ? 'application/pdf'
+        : 'image/jpeg';
+      return `data:${mimeType};base64,${base64}`;
     } catch (error) {
       console.error('Erro ao converter URI para base64:', error);
       throw error;
@@ -203,37 +208,47 @@ export default function AddTransactionScreen() {
 
   useEffect(() => {
     if (transactionId && !isLoading) {
+      const userId = auth.currentUser?.uid;
+      if (!userId) {
+        Alert.alert('Erro', 'Usuario nao autenticado.');
+        router.push('/login');
+        return;
+      }
+
       setIsLoading(true);
-      fetch(`${API_ENDPOINTS.transactions}/${transactionId}`)
-        .then((res) => res.json())
-        .then((data) => {
+      getDoc(doc(db, 'transactions', transactionId))
+        .then((snapshot) => {
+          if (!snapshot.exists()) {
+            throw new Error('Transacao nao encontrada.');
+          }
+          const data = snapshot.data();
+          if (data.userId !== userId) {
+            throw new Error('Acesso negado.');
+          }
+
           setTransactionType(data.type);
           setTitle(data.description);
-          // formata o valor como moeda
           const formattedAmount = new Intl.NumberFormat('pt-BR', {
             style: 'currency',
             currency: 'BRL',
             minimumFractionDigits: 2,
           }).format(data.amount);
           setAmount(formattedAmount);
-          // formata a data como DD/MM/YYYY
-          const transactionDate = new Date(data.date);
-          const day = String(transactionDate.getDate()).padStart(2, '0');
-          const month = String(transactionDate.getMonth() + 1).padStart(2, '0');
-          const year = transactionDate.getFullYear();
+          const rawDate = data.date instanceof Timestamp ? data.date.toDate() : new Date(data.date);
+          const day = String(rawDate.getDate()).padStart(2, '0');
+          const month = String(rawDate.getMonth() + 1).padStart(2, '0');
+          const year = rawDate.getFullYear();
           setDate(`${day}/${month}/${year}`);
           setCategory(data.category);
           if (data.imageUri) {
-            // Se já for base64 (data URI), usa diretamente
-            // Se for blob URI antigo, não será encontrado, mas não quebra a aplicação
             setSelectedImage(data.imageUri);
             setImageType(data.imageType || 'image');
             setFileName(data.fileName || 'arquivo_anexado');
           }
         })
         .catch((error) => {
-          console.error('Erro ao carregar transação:', error);
-          Alert.alert('Erro', 'Não foi possível carregar a transação.');
+          console.error('Erro ao carregar transacao:', error);
+          Alert.alert('Erro', 'Nao foi possivel carregar a transacao.');
           router.push('/transactions');
         })
         .finally(() => setIsLoading(false));
@@ -241,11 +256,9 @@ export default function AddTransactionScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [transactionId]);
 
-  // ajusta categoria quando o tipo muda
   useEffect(() => {
     const availableCategories = getAvailableCategories();
     if (!availableCategories.includes(category)) {
-      // se a categoria atual não é válida para o novo tipo, muda para a primeira disponível
       setCategory(availableCategories[0]);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -260,7 +273,7 @@ export default function AddTransactionScreen() {
     try {
       const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (status !== 'granted') {
-        Alert.alert('Permissão necessária', 'Precisamos de permissão para acessar suas imagens.');
+        Alert.alert('Permissao necessaria', 'Precisamos de permissao para acessar suas imagens.');
         return;
       }
 
@@ -273,7 +286,6 @@ export default function AddTransactionScreen() {
 
       if (!result.canceled && result.assets && result.assets.length > 0) {
         const asset = result.assets[0];
-        // Converte para base64 para persistência
         try {
           const base64 = await uriToBase64(asset.uri);
           setSelectedImage(base64);
@@ -281,12 +293,12 @@ export default function AddTransactionScreen() {
           setFileName(asset.fileName || asset.uri.split('/').pop() || 'imagem.jpg');
         } catch (error) {
           console.error('Erro ao converter imagem:', error);
-          Alert.alert('Erro', 'Não foi possível processar a imagem. Tente novamente.');
+          Alert.alert('Erro', 'Nao foi possivel processar a imagem. Tente novamente.');
         }
       }
     } catch (error) {
       console.error('Erro ao selecionar imagem:', error);
-      Alert.alert('Erro', 'Não foi possível selecionar a imagem. Tente novamente.');
+      Alert.alert('Erro', 'Nao foi possivel selecionar a imagem. Tente novamente.');
     }
   };
 
@@ -299,7 +311,6 @@ export default function AddTransactionScreen() {
 
       if (!result.canceled && result.assets && result.assets.length > 0) {
         const asset = result.assets[0];
-        // Converte para base64 para persistência
         try {
           const base64 = await uriToBase64(asset.uri);
           setSelectedImage(base64);
@@ -307,17 +318,16 @@ export default function AddTransactionScreen() {
           setFileName(asset.name || 'documento.pdf');
         } catch (error) {
           console.error('Erro ao converter PDF:', error);
-          Alert.alert('Erro', 'Não foi possível processar o arquivo PDF. Tente novamente.');
+          Alert.alert('Erro', 'Nao foi possivel processar o arquivo PDF. Tente novamente.');
         }
       }
     } catch (error: any) {
-      // Se o usuário cancelou, não precisa mostrar erro
       const errorMessage = error?.message || String(error);
       if (errorMessage.includes('cancel') || errorMessage.includes('Cancel')) {
         return;
       }
       console.error('Erro ao selecionar PDF:', error);
-      Alert.alert('Erro', 'Não foi possível selecionar o arquivo PDF. Tente novamente.');
+      Alert.alert('Erro', 'Nao foi possivel selecionar o arquivo PDF. Tente novamente.');
     }
   };
 
@@ -356,54 +366,62 @@ export default function AddTransactionScreen() {
 
     const transactionDate = parseDate(date);
     if (!transactionDate) {
-      Alert.alert('Erro', 'Data inválida. Use o formato DD/MM/YYYY');
+      Alert.alert('Erro', 'Data invalida. Use o formato DD/MM/YYYY');
       return;
     }
     if (isSaving) return;
+
+    const userId = auth.currentUser?.uid;
+    if (!userId) {
+      Alert.alert('Erro', 'Usuario nao autenticado.');
+      return;
+    }
+
     setIsSaving(true);
 
     try {
-      const now = new Date();
       const transaction = {
         description: title.trim(),
         amount: amountValue,
         type: transactionType,
         category: category,
-        date: transactionDate.toISOString(),
-        ...(isEditing ? {} : { createdAt: now.toISOString() }),
+        date: Timestamp.fromDate(transactionDate),
+        userId,
         ...(selectedImage
           ? {
               imageUri: selectedImage,
               imageType: imageType,
-              fileName: fileName || undefined,
+              fileName: fileName || null,
             }
           : {}),
       };
 
-      const url = isEditing
-        ? `${API_ENDPOINTS.transactions}/${transactionId}`
-        : API_ENDPOINTS.transactions;
-      const method = isEditing ? 'PUT' : 'POST';
-
-      const response = await fetch(url, {
-        method: method,
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(transaction),
-      });
-
-      if (!response.ok) {
-        throw new Error(`Erro ao ${isEditing ? 'atualizar' : 'salvar'}: ${response.status}`);
+      if (isEditing && transactionId) {
+        await updateDoc(doc(db, 'transactions', transactionId), {
+          ...transaction,
+          ...(selectedImage
+            ? {}
+            : {
+                imageUri: deleteField(),
+                imageType: deleteField(),
+                fileName: deleteField(),
+              }),
+          updatedAt: serverTimestamp(),
+        });
+      } else {
+        await addDoc(collection(db, 'transactions'), {
+          ...transaction,
+          createdAt: serverTimestamp(),
+        });
       }
 
       const dataAtual = Date.now();
       router.replace({ pathname: '/transactions', params: { refresh: String(dataAtual) } });
     } catch (error) {
-      console.error(`Erro ao ${isEditing ? 'atualizar' : 'salvar'} transação:`, error);
+      console.error(`Erro ao ${isEditing ? 'atualizar' : 'salvar'} transacao:`, error);
       Alert.alert(
         'Erro',
-        `Não foi possível ${isEditing ? 'atualizar' : 'salvar'} a transação. Verifique se o servidor está rodando.`
+        `Nao foi possivel ${isEditing ? 'atualizar' : 'salvar'} a transacao.`
       );
       setIsSaving(false);
     }
@@ -413,12 +431,12 @@ export default function AddTransactionScreen() {
     <SafeAreaView style={styles.safeArea}>
       <StatusBar barStyle="light-content" backgroundColor={HEADER_BG} />
 
-      <View style={styles.header}>
+      <View style={[styles.header, { paddingTop: Math.max(insets.top, 12) }]}>
         <TouchableOpacity onPress={() => router.push('/transactions')}>
           <Ionicons name="chevron-back" size={28} color="#fff" />
         </TouchableOpacity>
         <Text style={styles.logoText}>
-          <Text style={{ color: '#fff' }}>{isEditing ? 'Editar Transação' : 'Nova Transação'}</Text>
+          <Text style={{ color: '#fff' }}>{isEditing ? 'Editar Transacao' : 'Nova Transacao'}</Text>
         </Text>
         <View style={{ width: 28 }} />
       </View>
@@ -431,12 +449,12 @@ export default function AddTransactionScreen() {
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}>
           <Text style={styles.title}>
-            Preencha os dados da transação
+            Preencha os dados da transacao
           </Text>
 
           <View style={styles.inputContainer}>
             {/* tipo */}
-            <Text style={styles.label}>Tipo de Transação</Text>
+            <Text style={styles.label}>Tipo de Transacao</Text>
             <View style={styles.typeSelector}>
               <TouchableOpacity
                 style={[
@@ -479,10 +497,10 @@ export default function AddTransactionScreen() {
               </TouchableOpacity>
             </View>
 
-            <Text style={styles.label}>Título</Text>
+            <Text style={styles.label}>Titulo</Text>
             <TextInput
               style={styles.input}
-              placeholder="Digite o título da transação"
+              placeholder="Digite o titulo da transacao"
               value={title}
               onChangeText={setTitle}
               maxLength={100}
@@ -575,7 +593,7 @@ export default function AddTransactionScreen() {
           {isLoading ? (
             <View style={styles.loadingContainer}>
               <ActivityIndicator size="large" color={THEME_COLOR} />
-              <Text style={styles.loadingText}>Carregando transação...</Text>
+              <Text style={styles.loadingText}>Carregando transacao...</Text>
             </View>
           ) : (
             <TouchableOpacity
@@ -590,7 +608,7 @@ export default function AddTransactionScreen() {
                 <ActivityIndicator color="#fff" />
               ) : (
                 <Text style={styles.buttonText}>
-                  {isEditing ? 'Atualizar Transação' : 'Salvar Transação'}
+                  {isEditing ? 'Atualizar Transacao' : 'Salvar Transacao'}
                 </Text>
               )}
             </TouchableOpacity>
@@ -646,7 +664,7 @@ export default function AddTransactionScreen() {
         </View>
       </Modal>
 
-      {/* Modal de Seleção de Arquivo */}
+      {/* Modal de Seleccao de Arquivo */}
       <Modal
         visible={showFilePickerModal}
         animationType="slide"
