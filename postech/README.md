@@ -1,83 +1,49 @@
-# Welcome to your Expo app 👋
+# Byte Bank (Expo + Firebase)
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+Aplicativo mobile de gerenciamento financeiro com login, cadastro, extrato de transacoes, filtros e anexos.
 
-## Get started
+## Funcionalidades
 
-1. Install dependencies
+- Autenticacao com Firebase (login, cadastro e recuperar senha)
+- Listagem de transacoes com filtros e paginacao
+- Adicionar e editar transacoes
+- Anexos salvos como base64 no Firestore
 
-   ```bash
-   npm install
-   ```
+## Requisitos
 
-2. Start the app
+- Node.js 18+
+- NPM 9+
+- Expo CLI (via `npx`)
+- Android Studio (para emulador) ou dispositivo fisico
 
-   ```bash
-   npx expo start
-   ```
+## Dependencias
 
-## Android (one command, fixed port)
+```bash
+npm install
+```
 
-After the dev build is installed once, you can run everything with:
+## Configuracao do Firebase
+
+A integracao com Firebase (Auth + Firestore) ja esta configurada no projeto. Se precisar ajustar as chaves:
+
+- Arquivo: `postech/app.json`
+- Secao: `expo.extra.firebase`
+
+O bloco ja esta preenchido no arquivo do projeto.
+
+## Rodando o app
+
+```bash
+npx expo start
+```
+
+Android (porta fixa):
 
 ```bash
 npm run start:android
 ```
 
-## Firebase setup
+## Observacoes
 
-1. Create a Firebase project and enable Email/Password authentication.
-2. Create a Cloud Firestore database and a Storage bucket.
-3. Copy your Firebase config into `app.json` under `expo.extra.firebase`:
-
-   ```json
-   {
-     "expo": {
-       "extra": {
-         "firebase": {
-           "apiKey": "YOUR_API_KEY",
-           "authDomain": "YOUR_PROJECT.firebaseapp.com",
-           "projectId": "YOUR_PROJECT_ID",
-           "storageBucket": "YOUR_PROJECT.appspot.com",
-           "messagingSenderId": "YOUR_SENDER_ID",
-           "appId": "YOUR_APP_ID"
-         }
-       }
-     }
-   }
-   ```
-
-4. Start the app and create an account in the signup screen.
-
-In the output, you'll find options to open the app in a
-
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
-
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
-
-## Get a fresh project
-
-When you're ready, run:
-
-```bash
-npm run reset-project
-```
-
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
-
-## Learn more
-
-To learn more about developing your project with Expo, look at the following resources:
-
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
-
-## Join the community
-
-Join our community of developers creating universal apps.
-
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+- As transacoes sao salvas no Firestore com `userId`.
+- Anexos sao armazenados como base64 no Firestore (sem Storage).
