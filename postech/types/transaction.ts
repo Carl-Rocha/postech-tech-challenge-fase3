@@ -11,15 +11,17 @@ export type TransactionCategory =
 
 export interface Transaction {
   id: string;
+  userId: string;
   description: string;
   amount: number;
   type: TransactionType;
   category: TransactionCategory;
-  date: Date;
-  createdAt: Date;
-  imageUri?: string;
-  imageType?: 'image' | 'pdf';
-  fileName?: string;
+  date: Date | string;
+  createdAt?: any;
+  updatedAt?: any;
+  imageUri?: string | null;
+  imageType?: 'image' | 'pdf' | null;
+  fileName?: string | null;
 }
 
 export interface TransactionFilters {

@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import {
   View,
   Text,
@@ -7,7 +7,6 @@ import {
   SafeAreaView,
   StatusBar,
   TouchableOpacity,
-  FlatList,
   TextInput,
   Modal,
   ActivityIndicator,
@@ -17,6 +16,11 @@ import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useTransactionsContext } from '@/context/TransactionsContext';
 import { Transaction, TransactionCategory, TransactionType } from '@/types/transaction';
+
+import { FlashList } from '@shopify/flash-list';
+import { useInfiniteQuery } from '@tanstack/react-query';
+import { Subject } from 'rxjs';
+import { debounceTime, distinctUntilChanged } from 'rxjs/operators';
 
 const THEME_COLOR = '#EF6C4D';
 const HEADER_BG = '#000';
@@ -43,6 +47,15 @@ const CATEGORY_ICONS: Record<TransactionCategory, string> = {
   outros: 'ellipse',
 };
 
+const fetchTransactionsAPI = async ({ pageParam = 1 }) => {
+  await new Promise(resolve => setTimeout(resolve, 800));
+  return {
+    data: [] as Transaction[], // backend aqui
+    nextPage: pageParam + 1,
+    hasMore: false 
+  };
+};
+
 export default function TransactionsScreen() {
   const router = useRouter();
   const params = useLocalSearchParams();
@@ -53,29 +66,60 @@ export default function TransactionsScreen() {
   const [selectedType, setSelectedType] = useState<TransactionType | undefined>();
   const [startDate, setStartDate] = useState<Date | undefined>();
   const [endDate, setEndDate] = useState<Date | undefined>();
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+  const searchSubject = useMemo(() => new Subject<string>(), []);
+
+  useEffect(() => {
+    const subscription = searchSubject.pipe(
+      debounceTime(500),
+      distinctUntilChanged()
+    ).subscribe(text => setDebouncedSearch(text));
+    return () => subscription.unsubscribe();
+  }, [searchSubject]);
+
+  const handleSearchChange = (text: string) => {
+    setSearchText(text);
+    searchSubject.next(text);
+  };
 
   const {
-    transactions,
+    transactions: contextTransactions,
     summary,
     updateFilters,
-    loadMore,
-    isLoading,
-    isLoadingMore,
-    hasMore,
     totalCount,
-    error,
-    refetch,
+    error: contextError,
+    refetch: refetchContext,
   } = useTransactionsContext();
+
+  const {
+    data,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+    isLoading: isQueryLoading,
+    refetch: refetchQuery
+  } = useInfiniteQuery({
+    queryKey: ['transactions', { search: debouncedSearch, category: selectedCategory, type: selectedType }],
+    queryFn: fetchTransactionsAPI,
+    getNextPageParam: (lastPage) => lastPage.hasMore ? lastPage.nextPage : undefined,
+    initialPageParam: 1,
+  });
+
+  const transactionsList = useMemo(() => {
+    const queryData = data?.pages.flatMap(page => page.data) || [];
+    return queryData.length > 0 ? queryData : contextTransactions;
+  }, [data, contextTransactions]);
 
   React.useEffect(() => {
     if (params.refresh) {
       const timer = setTimeout(() => {
-        refetch();
+        refetchQuery();
+        refetchContext();
         router.setParams({ refresh: undefined });
       }, 300);
       return () => clearTimeout(timer);
     }
-  }, [params.refresh, refetch, router]);
+  }, [params.refresh, refetchQuery, refetchContext, router]);
 
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('pt-BR', {
@@ -92,18 +136,17 @@ export default function TransactionsScreen() {
     }).format(date);
   };
 
-  const formatDateShort = (date: Date) => {
+  const formatDateShort = (date: Date | string) => {
+    const d = new Date(date);
     const today = new Date();
     const yesterday = new Date(today);
     yesterday.setDate(yesterday.getDate() - 1);
 
-    if (date.toDateString() === today.toDateString()) {
+    if (d.toDateString() === today.toDateString()) 
       return 'Hoje';
-    }
-    if (date.toDateString() === yesterday.toDateString()) {
+    if (d.toDateString() === yesterday.toDateString()) 
       return 'Ontem';
-    }
-    return formatDate(date);
+    return new Intl.DateTimeFormat('pt-BR', { day: '2-digit', month: '2-digit' }).format(d);
   };
 
   const applyFilters = () => {
@@ -119,6 +162,7 @@ export default function TransactionsScreen() {
 
   const clearFilters = () => {
     setSearchText('');
+    setDebouncedSearch('');
     setSelectedCategory(undefined);
     setSelectedType(undefined);
     setStartDate(undefined);
@@ -127,9 +171,9 @@ export default function TransactionsScreen() {
     setShowFilters(false);
   };
 
-  const renderTransactionItem = ({ item }: { item: Transaction }) => {
+  const renderTransactionItem = useCallback(({ item }: { item: Transaction }) => {
     const isIncome = item.type === 'income';
-    const iconName = CATEGORY_ICONS[item.category];
+    const iconName = CATEGORY_ICONS[item.category] || 'ellipse';
 
     return (
       <View style={styles.transactionItem}>
@@ -166,10 +210,11 @@ export default function TransactionsScreen() {
         </View>
       </View>
     );
-  };
+  }, []);
 
   const handleClearSearch = useCallback(() => {
     setSearchText('');
+    searchSubject.next('');
     updateFilters({
       search: undefined,
       category: selectedCategory,
@@ -177,10 +222,10 @@ export default function TransactionsScreen() {
       startDate,
       endDate,
     });
-  }, [selectedCategory, selectedType, startDate, endDate, updateFilters]);
+  }, [selectedCategory, selectedType, startDate, endDate, updateFilters, searchSubject]);
 
   const renderFooter = () => {
-    if (!isLoadingMore) return null;
+    if (!isFetchingNextPage) return null;
     return (
       <View style={styles.loadingFooter}>
         <ActivityIndicator size="small" color={THEME_COLOR} />
@@ -247,7 +292,7 @@ export default function TransactionsScreen() {
             style={styles.searchInput}
             placeholder="Digite para buscar transações..."
             value={searchText}
-            onChangeText={setSearchText}
+            onChangeText={handleSearchChange} // Alterado para RxJS
             onSubmitEditing={applyFilters}
             autoCorrect={false}
             autoCapitalize="none"
@@ -263,36 +308,34 @@ export default function TransactionsScreen() {
       <View style={styles.extractHeader}>
         <Text style={styles.extractTitle}>Extrato</Text>
         <Text style={styles.extractCount}>
-          {totalCount} {totalCount === 1 ? 'transação' : 'transações'}
+          {transactionsList.length} {transactionsList.length === 1 ? 'transação' : 'transações'}
         </Text>
       </View>
 
-      {error && (
+      {contextError && (
         <View style={styles.errorContainer}>
           <Ionicons name="alert-circle" size={24} color="#EF6C4D" />
-          <Text style={styles.errorText}>{error}</Text>
+          <Text style={styles.errorText}>{contextError}</Text>
         </View>
       )}
 
-      {/* lista transacao */}
-      <FlatList
-        data={transactions}
-        renderItem={renderTransactionItem}
-        keyExtractor={(item) => item.id}
-        ListFooterComponent={renderFooter}
-        ListEmptyComponent={!isLoading ? renderEmptyState : null}
-        contentContainerStyle={styles.listContent}
-        onEndReached={() => {
-          if (hasMore && !isLoadingMore && !isLoading) {
-            loadMore();
-          }
-        }}
-        onEndReachedThreshold={0.5}
-        showsVerticalScrollIndicator={false}
-        keyboardShouldPersistTaps="handled"
-        removeClippedSubviews={false}
-      />
-
+      <View style={{ flex: 1, minHeight: 2 }}> 
+        {/* lista transacao */}
+        <FlashList
+          data={transactionsList}
+          renderItem={renderTransactionItem}
+          keyExtractor={(item) => item.id}
+          ListFooterComponent={renderFooter}
+          ListEmptyComponent={!isQueryLoading ? renderEmptyState : null}
+          contentContainerStyle={styles.listContent}
+          onEndReached={() => {
+            if (hasNextPage) fetchNextPage();
+          }}
+          onEndReachedThreshold={0.5}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+        />
+      </View>
       {/* add transacao */}
       <TouchableOpacity
         style={styles.fab}
@@ -602,6 +645,7 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 3 },
     shadowOpacity: 0.3,
     shadowRadius: 4,
+    zIndex: 999,
   },
   loadingFooter: {
     paddingVertical: 20,
@@ -761,4 +805,3 @@ const styles = StyleSheet.create({
     color: '#fff',
   },
 });
-

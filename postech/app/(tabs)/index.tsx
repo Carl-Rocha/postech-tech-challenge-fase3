@@ -4,7 +4,6 @@ import {
   Text, 
   StyleSheet, 
   TouchableOpacity, 
-  Image, 
   ScrollView, 
   SafeAreaView, 
   StatusBar 
@@ -13,14 +12,38 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import Footer from '../Footer';
-
+import { Image } from 'expo-image';
+import { useQueryClient } from '@tanstack/react-query';
+import { Transaction } from '@/types/transaction';
 
 const THEME_COLOR = '#EF6C4D';
 const HEADER_BG = '#000';
+const HERO_IMAGE_URL = 'https://cdn-icons-png.flaticon.com/512/7466/7466137.png';
+const BLUR_HASH = '|rF?hV%2WCj[ayj[a|j[az_NaeWBj@ayfRayfQfQ_3t7t7j[ayfRayfQfQ_3t7t7j[ayfRayfQfQ_3t7t7j[ayfRayfQfQ_3t7t7j[ayfRayfQfQ_3t7t7j[ayfRayfQfQ';
 
 export default function HomeScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  
+  const queryClient = useQueryClient();
+
+  const handleNavigateToTransactions = async () => {
+    try {
+      await queryClient.prefetchInfiniteQuery({
+        queryKey: ['transactions', { search: '', category: undefined, type: undefined }],
+        queryFn: async () => {
+             // Chama API
+             return { data: [], nextPage: 2, hasMore: false };
+        },
+        initialPageParam: 1,
+        staleTime: 1000 * 60 * 5, // 5 minutos
+      });
+    } catch (err) {
+      console.log('Erro no prefetch (não bloqueante):', err);
+    }
+
+    router.push('/transactions');
+  };
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -29,27 +52,36 @@ export default function HomeScreen() {
       <ScrollView contentContainerStyle={styles.scrollContent} bounces={false}>
         
         <View style={[styles.header, { paddingTop: Math.max(insets.top, 12) }]}>
-            <TouchableOpacity>
+            <TouchableOpacity activeOpacity={0.7}>
                 <Ionicons name="menu" size={28} color="#EF6C4D" />
             </TouchableOpacity>
             <Text style={styles.logoText}>
                 <Text style={{color: '#fff'}}>Byte</Text>
                 <Text style={{color: THEME_COLOR}}>bank</Text>
             </Text>
-            <TouchableOpacity onPress={() => router.push('/transactions')}>
+            <TouchableOpacity onPress={handleNavigateToTransactions} activeOpacity={0.7}>
                 <Ionicons name="wallet" size={28} color="#EF6C4D" />
             </TouchableOpacity>
         </View>
 
         <View style={styles.heroSection}>
            <Text style={styles.heroTitle}>Experimente mais liberdade...</Text>
-           <Image source={{ uri: 'https://cdn-icons-png.flaticon.com/512/7466/7466137.png' }} style={styles.heroImage} resizeMode="contain" />
+           
+           <Image 
+             source={HERO_IMAGE_URL} 
+             style={styles.heroImage} 
+             contentFit="contain"
+             placeholder={BLUR_HASH}
+             transition={500}
+             cachePolicy="memory-disk"
+           />
+           
            <View style={styles.heroButtonsContainer}>
-              <TouchableOpacity style={styles.btnPrimary} onPress={() => router.push('/signup')}>
+              <TouchableOpacity style={styles.btnPrimary} onPress={() => router.push('/signup')} activeOpacity={0.8}>
                   <Text style={styles.btnPrimaryText}>Abrir conta</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={styles.btnSecondary} onPress={() => router.push('/login')}>
-                  <Text style={styles.btnSecondaryText}>Ja tenho conta</Text>
+              <TouchableOpacity style={styles.btnSecondary} onPress={() => router.push('/login')} activeOpacity={0.8}>
+                  <Text style={styles.btnSecondaryText}>Já tenho conta</Text>
               </TouchableOpacity>
            </View>
         </View>
@@ -58,33 +90,34 @@ export default function HomeScreen() {
             <Text style={styles.featuresTitle}>Vantagens do nosso banco:</Text>
             <View style={styles.featureItem}>
                 <Ionicons name="gift-outline" size={40} color={THEME_COLOR} style={styles.featureIcon} />
-                <Text style={styles.featureName}>Conta e cartao gratuitos</Text>
-                <Text style={styles.featureDesc}>Isso mesmo, nossa conta e digital...</Text>
+                <Text style={styles.featureName}>Conta e cartão gratuitos</Text>
+                <Text style={styles.featureDesc}>Isso mesmo, nossa conta é digital...</Text>
             </View>
             <View style={styles.featureItem}>
                 <Ionicons name="cash-outline" size={40} color={THEME_COLOR} style={styles.featureIcon} />
                 <Text style={styles.featureName}>Saques sem custo</Text>
-                <Text style={styles.featureDesc}>Voce pode sacar gratuitamente 4x...</Text>
+                <Text style={styles.featureDesc}>Você pode sacar gratuitamente 4x...</Text>
             </View>
             <View style={styles.featureItem}>
                 <Ionicons name="star-outline" size={40} color={THEME_COLOR} style={styles.featureIcon} />
                 <Text style={styles.featureName}>Programa de pontos</Text>
-                <Text style={styles.featureDesc}>Voce pode acumular pontos...</Text>
+                <Text style={styles.featureDesc}>Você pode acumular pontos...</Text>
             </View>
             <View style={styles.featureItem}>
                 <Ionicons name="shield-checkmark-outline" size={40} color={THEME_COLOR} style={styles.featureIcon} />
                 <Text style={styles.featureName}>Seguro Dispositivos</Text>
-                <Text style={styles.featureDesc}>Seus dispositivos moveis protegidos.</Text>
+                <Text style={styles.featureDesc}>Seus dispositivos móveis protegidos.</Text>
             </View>
         </View>
 
         <View style={styles.quickAccessSection}>
             <TouchableOpacity 
                 style={styles.quickAccessButton}
-                onPress={() => router.push('/transactions')}
+                onPress={handleNavigateToTransactions}
+                activeOpacity={0.8}
             >
                 <Ionicons name="list" size={24} color="#fff" />
-                <Text style={styles.quickAccessText}>Ver Transacoes</Text>
+                <Text style={styles.quickAccessText}>Ver Transações</Text>
             </TouchableOpacity>
         </View>
 
@@ -222,5 +255,3 @@ const styles = StyleSheet.create({
         fontWeight: 'bold',
     },
 });
-
-

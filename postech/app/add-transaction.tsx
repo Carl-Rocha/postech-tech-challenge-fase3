@@ -33,6 +33,8 @@ import {
   updateDoc,
 } from 'firebase/firestore';
 
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+
 const THEME_COLOR = '#EF6C4D';
 const HEADER_BG = '#000';
 
@@ -64,19 +66,65 @@ export default function AddTransactionScreen() {
   const insets = useSafeAreaInsets();
   const transactionId = params.id as string | undefined;
   const isEditing = !!transactionId;
-  
+  const queryClient = useQueryClient();
   const [transactionType, setTransactionType] = useState<TransactionType>('expense');
   const [title, setTitle] = useState('');
   const [amount, setAmount] = useState('');
   const [date, setDate] = useState('');
   const [category, setCategory] = useState<TransactionCategory>('outros');
   const [showCategoryModal, setShowCategoryModal] = useState(false);
-  const [isSaving, setIsSaving] = useState(false);
+    const [isSaving, setIsSaving] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [imageType, setImageType] = useState<'image' | 'pdf' | null>(null);
   const [fileName, setFileName] = useState<string | null>(null);
   const [showFilePickerModal, setShowFilePickerModal] = useState(false);
+
+  const { data: transactionData, isLoading: isLoadingData } = useQuery({
+    queryKey: ['transaction', transactionId],
+    queryFn: async () => {
+      if (!transactionId) return null;
+      const userId = auth.currentUser?.uid;
+      if (!userId) throw new Error('Usuario nao autenticado');
+      
+      const docRef = doc(db, 'transactions', transactionId);
+      const snapshot = await getDoc(docRef);
+      
+      if (!snapshot.exists()) throw new Error('Transacao nao encontrada.');
+      const data = snapshot.data();
+      
+      if (data.userId !== userId) throw new Error('Acesso negado.');
+      return data;
+    },
+    enabled: isEditing,
+  });
+
+  useEffect(() => {
+    if (transactionData) {
+      setTransactionType(transactionData.type);
+      setTitle(transactionData.description);
+      
+      const formattedAmount = new Intl.NumberFormat('pt-BR', {
+        style: 'currency',
+        currency: 'BRL',
+        minimumFractionDigits: 2,
+      }).format(transactionData.amount);
+      setAmount(formattedAmount);
+
+      const rawDate = transactionData.date instanceof Timestamp ? transactionData.date.toDate() : new Date(transactionData.date);
+      const day = String(rawDate.getDate()).padStart(2, '0');
+      const month = String(rawDate.getMonth() + 1).padStart(2, '0');
+      const year = rawDate.getFullYear();
+      setDate(`${day}/${month}/${year}`);
+      
+      setCategory(transactionData.category);
+      if (transactionData.imageUri) {
+        setSelectedImage(transactionData.imageUri);
+        setImageType(transactionData.imageType || 'image');
+        setFileName(transactionData.fileName || 'arquivo_anexado');
+      }
+    }
+  }, [transactionData]);
 
   const formatCurrency = (value: string) => {
     const numbers = value.replace(/\D/g, '');
@@ -164,7 +212,7 @@ export default function AddTransactionScreen() {
     return ['alimentacao', 'transporte', 'saude', 'educacao', 'lazer', 'moradia', 'outros'];
   };
 
-  // Funcao para converter URI para base64
+   // Funcao para converter URI para base64
   const uriToBase64 = async (uri: string): Promise<string> => {
     try {
       if (uri.startsWith('data:')) {
@@ -185,9 +233,9 @@ export default function AddTransactionScreen() {
           reader.readAsDataURL(blob);
         });
       }
-
+      
       const arrayBuffer = await blob.arrayBuffer();
-      const uint8Array = new Uint8Array(arrayBuffer);
+   const uint8Array = new Uint8Array(arrayBuffer);
       let binary = '';
       const chunkSize = 8192;
       for (let i = 0; i < uint8Array.length; i += chunkSize) {
@@ -261,7 +309,7 @@ export default function AddTransactionScreen() {
     if (!availableCategories.includes(category)) {
       setCategory(availableCategories[0]);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [transactionType]);
 
   const handleCategoryChange = (newCategory: TransactionCategory) => {
@@ -289,9 +337,9 @@ export default function AddTransactionScreen() {
         try {
           const base64 = await uriToBase64(asset.uri);
           setSelectedImage(base64);
-          setImageType('image');
-          setFileName(asset.fileName || asset.uri.split('/').pop() || 'imagem.jpg');
-        } catch (error) {
+        setImageType('image');
+        setFileName(asset.fileName || asset.uri.split('/').pop() || 'imagem.jpg');
+           } catch (error) {
           console.error('Erro ao converter imagem:', error);
           Alert.alert('Erro', 'Nao foi possivel processar a imagem. Tente novamente.');
         }
@@ -326,7 +374,7 @@ export default function AddTransactionScreen() {
       if (errorMessage.includes('cancel') || errorMessage.includes('Cancel')) {
         return;
       }
-      console.error('Erro ao selecionar PDF:', error);
+       console.error('Erro ao selecionar PDF:', error);
       Alert.alert('Erro', 'Nao foi possivel selecionar o arquivo PDF. Tente novamente.');
     }
   };
@@ -352,7 +400,57 @@ export default function AddTransactionScreen() {
     setFileName(null);
   };
 
-  const handleSave = async () => {
+  const saveMutation = useMutation({
+    mutationFn: async (formData: any) => {
+      const userId = auth.currentUser?.uid;
+      if (!userId) throw new Error('Usuario nao autenticado.');
+
+      const transactionData = {
+        description: formData.title.trim(),
+        amount: formData.amountValue,
+        type: formData.transactionType,
+        category: formData.category,
+        date: Timestamp.fromDate(formData.transactionDate),
+        userId,
+        ...(formData.selectedImage
+          ? {
+              imageUri: formData.selectedImage,
+              imageType: formData.imageType,
+              fileName: formData.fileName || null,
+            }
+          : {}),
+      };
+
+      if (isEditing && transactionId) {
+        await updateDoc(doc(db, 'transactions', transactionId), {
+          ...transactionData,
+          updatedAt: serverTimestamp(),
+          ...(formData.selectedImage
+            ? {}
+            : {
+                imageUri: deleteField(),
+                imageType: deleteField(),
+                fileName: deleteField(),
+              }),
+        });
+      } else {
+        await addDoc(collection(db, 'transactions'), {
+          ...transactionData,
+          createdAt: serverTimestamp(),
+        });
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['transactions'] });
+      router.back();
+    },
+    onError: (error) => {
+      console.error('Erro ao salvar:', error);
+      Alert.alert('Erro', 'Nao foi possivel salvar a transacao.');
+    }
+  });
+
+  const handleSave = () => {
     if (!title.trim() || !amount || !date || !category) {
       Alert.alert('Erro', 'Preencha todos os campos');
       return;
@@ -369,62 +467,17 @@ export default function AddTransactionScreen() {
       Alert.alert('Erro', 'Data invalida. Use o formato DD/MM/YYYY');
       return;
     }
-    if (isSaving) return;
 
-    const userId = auth.currentUser?.uid;
-    if (!userId) {
-      Alert.alert('Erro', 'Usuario nao autenticado.');
-      return;
-    }
-
-    setIsSaving(true);
-
-    try {
-      const transaction = {
-        description: title.trim(),
-        amount: amountValue,
-        type: transactionType,
-        category: category,
-        date: Timestamp.fromDate(transactionDate),
-        userId,
-        ...(selectedImage
-          ? {
-              imageUri: selectedImage,
-              imageType: imageType,
-              fileName: fileName || null,
-            }
-          : {}),
-      };
-
-      if (isEditing && transactionId) {
-        await updateDoc(doc(db, 'transactions', transactionId), {
-          ...transaction,
-          ...(selectedImage
-            ? {}
-            : {
-                imageUri: deleteField(),
-                imageType: deleteField(),
-                fileName: deleteField(),
-              }),
-          updatedAt: serverTimestamp(),
-        });
-      } else {
-        await addDoc(collection(db, 'transactions'), {
-          ...transaction,
-          createdAt: serverTimestamp(),
-        });
-      }
-
-      const dataAtual = Date.now();
-      router.replace({ pathname: '/transactions', params: { refresh: String(dataAtual) } });
-    } catch (error) {
-      console.error(`Erro ao ${isEditing ? 'atualizar' : 'salvar'} transacao:`, error);
-      Alert.alert(
-        'Erro',
-        `Nao foi possivel ${isEditing ? 'atualizar' : 'salvar'} a transacao.`
-      );
-      setIsSaving(false);
-    }
+    saveMutation.mutate({
+      title,
+      amountValue,
+      transactionType,
+      category,
+      transactionDate,
+      selectedImage,
+      imageType,
+      fileName
+    });
   };
 
   return (
@@ -448,146 +501,151 @@ export default function AddTransactionScreen() {
           contentContainerStyle={styles.content}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}>
-          <Text style={styles.title}>
-            Preencha os dados da transacao
-          </Text>
+          
+          {isLoadingData ? (
+             <ActivityIndicator size="large" color={THEME_COLOR} style={{ marginTop: 50 }} />
+          ) : (
+            <>
+              <Text style={styles.title}>
+                Preencha os dados da transacao
+              </Text>
 
-          <View style={styles.inputContainer}>
-            {/* tipo */}
-            <Text style={styles.label}>Tipo de Transacao</Text>
-            <View style={styles.typeSelector}>
-              <TouchableOpacity
-                style={[
-                  styles.typeOption,
-                  transactionType === 'income' && styles.typeOptionActive,
-                ]}
-                onPress={() => setTransactionType('income')}>
-                <Ionicons
-                  name="arrow-down-circle"
-                  size={24}
-                  color={transactionType === 'income' ? '#fff' : '#6DBF58'}
-                />
-                <Text
-                  style={[
-                    styles.typeOptionText,
-                    transactionType === 'income' && styles.typeOptionTextActive,
-                  ]}>
-                  Receita
-                </Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={[
-                  styles.typeOption,
-                  transactionType === 'expense' && styles.typeOptionActive,
-                ]}
-                onPress={() => setTransactionType('expense')}>
-                <Ionicons
-                  name="arrow-up-circle"
-                  size={24}
-                  color={transactionType === 'expense' ? '#fff' : '#EF6C4D'}
-                />
-                <Text
-                  style={[
-                    styles.typeOptionText,
-                    transactionType === 'expense' && styles.typeOptionTextActive,
-                  ]}>
-                  Despesa
-                </Text>
-              </TouchableOpacity>
-            </View>
-
-            <Text style={styles.label}>Titulo</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="Digite o titulo da transacao"
-              value={title}
-              onChangeText={setTitle}
-              maxLength={100}
-            />
-
-            {/* input data */}
-            <Text style={styles.label}>Data</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="DD/MM/YYYY"
-              value={date}
-              onChangeText={handleDateChange}
-              keyboardType="numeric"
-              maxLength={10}
-            />
-
-            {/* categoria */}
-            <Text style={styles.label}>Categoria</Text>
-            <TouchableOpacity
-              style={styles.categorySelector}
-              onPress={() => setShowCategoryModal(true)}>
-              <View style={styles.categorySelectorContent}>
-                <Ionicons
-                  name={CATEGORY_ICONS[category] as any}
-                  size={20}
-                  color={THEME_COLOR}
-                />
-                <Text style={styles.categorySelectorText}>
-                  {CATEGORY_LABELS[category]}
-                </Text>
-              </View>
-              <Ionicons name="chevron-down" size={20} color="#666" />
-            </TouchableOpacity>
-
-            {/* valor */}
-            <Text style={styles.label}>Valor</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="R$ 0,00"
-              value={amount}
-              onChangeText={handleAmountChange}
-              keyboardType="numeric"
-              maxLength={20}
-            />
-
-            {/* anexo */}
-            <Text style={styles.label}>Anexo (Opcional)</Text>
-            {selectedImage ? (
-              <View style={styles.imageContainer}>
-                {imageType === 'image' ? (
-                  <Image source={{ uri: selectedImage }} style={styles.previewImage} resizeMode="cover" />
-                ) : (
-                  <View style={styles.pdfPreview}>
-                    <Ionicons name="document" size={48} color={THEME_COLOR} />
-                    <Text style={styles.pdfFileName} numberOfLines={1}>
-                      {fileName}
+              <View style={styles.inputContainer}>
+                {/* tipo */}
+                <Text style={styles.label}>Tipo de Transacao</Text>
+                <View style={styles.typeSelector}>
+                  <TouchableOpacity
+                    style={[
+                      styles.typeOption,
+                      transactionType === 'income' && styles.typeOptionActive,
+                    ]}
+                    onPress={() => setTransactionType('income')}>
+                    <Ionicons
+                      name="arrow-down-circle"
+                      size={24}
+                      color={transactionType === 'income' ? '#fff' : '#6DBF58'}
+                    />
+                    <Text
+                      style={[
+                        styles.typeOptionText,
+                        transactionType === 'income' && styles.typeOptionTextActive,
+                      ]}>
+                      Receita
                     </Text>
-                  </View>
-                )}
-                <View style={styles.imageActions}>
-                  <TouchableOpacity
-                    style={styles.removeImageButton}
-                    onPress={handleRemoveImage}>
-                    <Ionicons name="trash-outline" size={20} color="#EF6C4D" />
-                    <Text style={styles.removeImageText}>Remover</Text>
                   </TouchableOpacity>
+
                   <TouchableOpacity
-                    style={styles.changeImageButton}
-                    onPress={handleSelectFile}>
-                    <Ionicons name="create-outline" size={20} color={THEME_COLOR} />
-                    <Text style={styles.changeImageText}>Alterar</Text>
+                    style={[
+                      styles.typeOption,
+                      transactionType === 'expense' && styles.typeOptionActive,
+                    ]}
+                    onPress={() => setTransactionType('expense')}>
+                    <Ionicons
+                      name="arrow-up-circle"
+                      size={24}
+                      color={transactionType === 'expense' ? '#fff' : '#EF6C4D'}
+                    />
+                    <Text
+                      style={[
+                        styles.typeOptionText,
+                        transactionType === 'expense' && styles.typeOptionTextActive,
+                      ]}>
+                      Despesa
+                    </Text>
                   </TouchableOpacity>
                 </View>
+
+                <Text style={styles.label}>Titulo</Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="Digite o titulo da transacao"
+                  value={title}
+                  onChangeText={setTitle}
+                  maxLength={100}
+                />
+
+                {/* input data */}
+                <Text style={styles.label}>Data</Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="DD/MM/YYYY"
+                  value={date}
+                  onChangeText={handleDateChange}
+                  keyboardType="numeric"
+                  maxLength={10}
+                />
+
+                {/* categoria */}
+                <Text style={styles.label}>Categoria</Text>
+                <TouchableOpacity
+                  style={styles.categorySelector}
+                  onPress={() => setShowCategoryModal(true)}>
+                  <View style={styles.categorySelectorContent}>
+                    <Ionicons
+                      name={CATEGORY_ICONS[category] as any}
+                      size={20}
+                      color={THEME_COLOR}
+                    />
+                    <Text style={styles.categorySelectorText}>
+                      {CATEGORY_LABELS[category]}
+                    </Text>
+                  </View>
+                  <Ionicons name="chevron-down" size={20} color="#666" />
+                </TouchableOpacity>
+
+                {/* valor */}
+                <Text style={styles.label}>Valor</Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="R$ 0,00"
+                  value={amount}
+                  onChangeText={handleAmountChange}
+                  keyboardType="numeric"
+                  maxLength={20}
+                />
+
+                {/* anexo */}
+                <Text style={styles.label}>Anexo (Opcional)</Text>
+                {selectedImage ? (
+                  <View style={styles.imageContainer}>
+                    {imageType === 'image' ? (
+                      <Image source={{ uri: selectedImage }} style={styles.previewImage} resizeMode="cover" />
+                    ) : (
+                      <View style={styles.pdfPreview}>
+                        <Ionicons name="document" size={48} color={THEME_COLOR} />
+                        <Text style={styles.pdfFileName} numberOfLines={1}>
+                          {fileName}
+                        </Text>
+                      </View>
+                    )}
+                    <View style={styles.imageActions}>
+                      <TouchableOpacity
+                        style={styles.removeImageButton}
+                        onPress={handleRemoveImage}>
+                        <Ionicons name="trash-outline" size={20} color="#EF6C4D" />
+                        <Text style={styles.removeImageText}>Remover</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={styles.changeImageButton}
+                        onPress={handleSelectFile}>
+                        <Ionicons name="create-outline" size={20} color={THEME_COLOR} />
+                        <Text style={styles.changeImageText}>Alterar</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                ) : (
+                  <TouchableOpacity
+                    style={styles.selectFileButton}
+                    onPress={handleSelectFile}
+                    activeOpacity={0.7}
+                    accessibilityLabel="Selecionar arquivo">
+                    <Ionicons name="attach-outline" size={24} color={THEME_COLOR} />
+                    <Text style={styles.selectFileText}>
+                      Selecionar arquivo (JPG, JPEG ou PDF)
+                    </Text>
+                  </TouchableOpacity>
+                )}
               </View>
-            ) : (
-              <TouchableOpacity
-                style={styles.selectFileButton}
-                onPress={handleSelectFile}
-                activeOpacity={0.7}
-                accessibilityLabel="Selecionar arquivo">
-                <Ionicons name="attach-outline" size={24} color={THEME_COLOR} />
-                <Text style={styles.selectFileText}>
-                  Selecionar arquivo (JPG, JPEG ou PDF)
-                </Text>
-              </TouchableOpacity>
-            )}
-          </View>
 
           {/* btn salvar */}
           {isLoading ? (
@@ -596,7 +654,7 @@ export default function AddTransactionScreen() {
               <Text style={styles.loadingText}>Carregando transacao...</Text>
             </View>
           ) : (
-            <TouchableOpacity
+              <TouchableOpacity
               style={[
                 styles.button,
                 (isSaving || !title.trim() || !amount || !date || !category || parseFloat(amount.replace(/\D/g, '')) === 0) &&
@@ -605,13 +663,15 @@ export default function AddTransactionScreen() {
               onPress={handleSave}
               disabled={isSaving || !title.trim() || !amount || !date || !category || parseFloat(amount.replace(/\D/g, '')) === 0}>
               {isSaving ? (
-                <ActivityIndicator color="#fff" />
-              ) : (
-                <Text style={styles.buttonText}>
-                  {isEditing ? 'Atualizar Transacao' : 'Salvar Transacao'}
-                </Text>
-              )}
-            </TouchableOpacity>
+                  <ActivityIndicator color="#fff" />
+                ) : (
+                  <Text style={styles.buttonText}>
+                    {isEditing ? 'Atualizar Transacao' : 'Salvar Transacao'}
+                  </Text>
+                )}
+              </TouchableOpacity>
+          )}
+            </>
           )}
         </ScrollView>
       </KeyboardAvoidingView>
