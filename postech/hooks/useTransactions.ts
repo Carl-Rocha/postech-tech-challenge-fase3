@@ -3,6 +3,7 @@ import { TransactionFilters } from '@/types/transaction';
 import { useTransactionFilters } from './useTransactionFilters';
 import { useTransactionPagination } from './useTransactionPagination';
 import { useTransactionSummary } from './useTransactionSummary';
+import { useTransactionRealtimeSignal } from './useTransactionRealtimeSignal';
 
 export function useTransactions(userId?: string | null, initialFilters?: TransactionFilters) {
   const { filters, updateFilters } = useTransactionFilters(initialFilters);
@@ -22,6 +23,7 @@ export function useTransactions(userId?: string | null, initialFilters?: Transac
 
   // rresumo financeiro
   const { summary, loadSummary } = useTransactionSummary(userId, filters);
+  const realtimeSignal = useTransactionRealtimeSignal(userId, filters);
 
   // atualiza filtros e reseta paginação
   const handleUpdateFilters = useCallback(
@@ -45,7 +47,7 @@ export function useTransactions(userId?: string | null, initialFilters?: Transac
 
     loadTransactions(1, false);
     loadSummary();
-  }, [filters, loadTransactions, loadSummary, userId, resetState]);
+  }, [filters, loadTransactions, loadSummary, realtimeSignal, userId, resetState]);
 
   return {
     transactions: displayedTransactions,

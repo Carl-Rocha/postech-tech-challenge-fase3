@@ -18,20 +18,12 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import * as ImagePicker from 'expo-image-picker';
-import * as DocumentPicker from 'expo-document-picker';
 import { TransactionType, TransactionCategory } from '@/types/transaction';
-import { auth, db } from '@/services/firebase';
-import {
-  addDoc,
-  collection,
-  deleteField,
-  doc,
-  getDoc,
-  serverTimestamp,
-  Timestamp,
-  updateDoc,
-} from 'firebase/firestore';
+import { auth } from '@/services/firebase';
+import { decryptSensitiveData, encryptSensitiveData } from '@/services/crypto';
+import { transactionsRepository } from '@/infrastructure/repositories';
+import { GetTransactionByIdUseCase } from '@/application/usecases/GetTransactionByIdUseCase';
+import { SaveTransactionUseCase } from '@/application/usecases/SaveTransactionUseCase';
 
 const THEME_COLOR = '#EF6C4D';
 const HEADER_BG = '#000';
@@ -57,6 +49,9 @@ const CATEGORY_ICONS: Record<TransactionCategory, string> = {
   salario: 'cash',
   outros: 'ellipse',
 };
+
+const getTransactionByIdUseCase = new GetTransactionByIdUseCase(transactionsRepository);
+const saveTransactionUseCase = new SaveTransactionUseCase(transactionsRepository);
 
 export default function AddTransactionScreen() {
   const router = useRouter();
@@ -216,34 +211,30 @@ export default function AddTransactionScreen() {
       }
 
       setIsLoading(true);
-      getDoc(doc(db, 'transactions', transactionId))
-        .then((snapshot) => {
-          if (!snapshot.exists()) {
+      getTransactionByIdUseCase
+        .execute(userId, transactionId)
+        .then((transaction) => {
+          if (!transaction) {
             throw new Error('Transacao nao encontrada.');
           }
-          const data = snapshot.data();
-          if (data.userId !== userId) {
-            throw new Error('Acesso negado.');
-          }
-
-          setTransactionType(data.type);
-          setTitle(data.description);
+          setTransactionType(transaction.type);
+          setTitle(transaction.description);
           const formattedAmount = new Intl.NumberFormat('pt-BR', {
             style: 'currency',
             currency: 'BRL',
             minimumFractionDigits: 2,
-          }).format(data.amount);
+          }).format(transaction.amount);
           setAmount(formattedAmount);
-          const rawDate = data.date instanceof Timestamp ? data.date.toDate() : new Date(data.date);
+          const rawDate = new Date(transaction.date);
           const day = String(rawDate.getDate()).padStart(2, '0');
           const month = String(rawDate.getMonth() + 1).padStart(2, '0');
           const year = rawDate.getFullYear();
           setDate(`${day}/${month}/${year}`);
-          setCategory(data.category);
-          if (data.imageUri) {
-            setSelectedImage(data.imageUri);
-            setImageType(data.imageType || 'image');
-            setFileName(data.fileName || 'arquivo_anexado');
+          setCategory(transaction.category);
+          if (transaction.imageUri) {
+            setSelectedImage(decryptSensitiveData(String(transaction.imageUri)));
+            setImageType(transaction.imageType || 'image');
+            setFileName(transaction.fileName || 'arquivo_anexado');
           }
         })
         .catch((error) => {
@@ -271,6 +262,7 @@ export default function AddTransactionScreen() {
 
   const handleSelectImage = async () => {
     try {
+      const ImagePicker = await import('expo-image-picker');
       const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (status !== 'granted') {
         Alert.alert('Permissao necessaria', 'Precisamos de permissao para acessar suas imagens.');
@@ -304,6 +296,7 @@ export default function AddTransactionScreen() {
 
   const handleSelectPDF = async () => {
     try {
+      const DocumentPicker = await import('expo-document-picker');
       const result = await DocumentPicker.getDocumentAsync({
         type: ['application/pdf'],
         copyToCacheDirectory: true,
@@ -385,34 +378,21 @@ export default function AddTransactionScreen() {
         amount: amountValue,
         type: transactionType,
         category: category,
-        date: Timestamp.fromDate(transactionDate),
+        date: transactionDate,
         userId,
         ...(selectedImage
           ? {
-              imageUri: selectedImage,
-              imageType: imageType,
+              imageUri: encryptSensitiveData(selectedImage),
+              imageType: imageType || undefined,
               fileName: fileName || null,
             }
           : {}),
       };
 
       if (isEditing && transactionId) {
-        await updateDoc(doc(db, 'transactions', transactionId), {
-          ...transaction,
-          ...(selectedImage
-            ? {}
-            : {
-                imageUri: deleteField(),
-                imageType: deleteField(),
-                fileName: deleteField(),
-              }),
-          updatedAt: serverTimestamp(),
-        });
+        await saveTransactionUseCase.update(transactionId, transaction);
       } else {
-        await addDoc(collection(db, 'transactions'), {
-          ...transaction,
-          createdAt: serverTimestamp(),
-        });
+        await saveTransactionUseCase.create(transaction);
       }
 
       const dataAtual = Date.now();

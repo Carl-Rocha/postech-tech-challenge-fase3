@@ -22,6 +22,15 @@ export default function HomeScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
 
+  React.useEffect(() => {
+    void Promise.all([
+      import('../transactions'),
+      import('../login'),
+      import('../signup'),
+      import('../add-transaction'),
+    ]);
+  }, []);
+
   return (
     <SafeAreaView style={styles.safeArea}>
       <StatusBar barStyle="light-content" backgroundColor={HEADER_BG} />

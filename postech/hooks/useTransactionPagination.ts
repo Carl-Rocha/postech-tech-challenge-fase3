@@ -1,95 +1,16 @@
 import { useState, useCallback, useRef } from 'react';
 import { Transaction, TransactionFilters } from '@/types/transaction';
-import {
-  collection,
-  getCountFromServer,
-  getDocs,
-  orderBy,
-  query,
-  startAfter,
-  where,
-  limit,
-  QueryDocumentSnapshot,
-  DocumentData,
-  Timestamp,
-} from 'firebase/firestore';
-import { db } from '@/services/firebase';
+import { TransactionCursor } from '@/domain/repositories/TransactionsRepository';
+import { transactionsRepository } from '@/infrastructure/repositories';
+import { GetTransactionsPageUseCase } from '@/application/usecases/GetTransactionsPageUseCase';
+import { GetTransactionsCountUseCase } from '@/application/usecases/GetTransactionsCountUseCase';
+import { SearchTransactionsUseCase } from '@/application/usecases/SearchTransactionsUseCase';
 
 const ITEMS_PER_PAGE = 20;
 
-const parseDate = (value: unknown): Date => {
-  if (value instanceof Date) return value;
-  if (value instanceof Timestamp) return value.toDate();
-  if (typeof value === 'string') return new Date(value);
-  return new Date();
-};
-
-const buildBaseQuery = (filters: TransactionFilters, userId: string) => {
-  let q = query(collection(db, 'transactions'), where('userId', '==', userId));
-
-  if (filters.type) {
-    q = query(q, where('type', '==', filters.type));
-  }
-  if (filters.category) {
-    q = query(q, where('category', '==', filters.category));
-  }
-  if (filters.startDate) {
-    q = query(q, where('date', '>=', filters.startDate));
-  }
-  if (filters.endDate) {
-    q = query(q, where('date', '<=', filters.endDate));
-  }
-
-  return query(q, orderBy('date', 'desc'));
-};
-
-const mapDocToTransaction = (docSnap: QueryDocumentSnapshot<DocumentData>): Transaction => {
-  const data = docSnap.data();
-  return {
-    id: docSnap.id,
-    description: String(data.description || ''),
-    amount: Number(data.amount || 0),
-    type: data.type,
-    category: data.category,
-    date: parseDate(data.date),
-    createdAt: parseDate(data.createdAt),
-    imageUri: data.imageUri,
-    imageType: data.imageType,
-    fileName: data.fileName,
-  };
-};
-
-const fetchTransactionPage = async (
-  filters: TransactionFilters,
-  userId: string,
-  lastDoc: QueryDocumentSnapshot<DocumentData> | null
-): Promise<{
-  data: Transaction[];
-  lastVisible: QueryDocumentSnapshot<DocumentData> | null;
-}> => {
-  let q = buildBaseQuery(filters, userId);
-  q = query(q, limit(ITEMS_PER_PAGE));
-  if (lastDoc) {
-    q = query(q, startAfter(lastDoc));
-  }
-
-  const snapshot = await getDocs(q);
-  const data = snapshot.docs.map(mapDocToTransaction);
-  const lastVisible = snapshot.docs[snapshot.docs.length - 1] ?? null;
-  return { data, lastVisible };
-};
-
-const fetchTransactionsCount = async (filters: TransactionFilters, userId: string): Promise<number> => {
-  const q = buildBaseQuery(filters, userId);
-  const snapshot = await getCountFromServer(q);
-  return snapshot.data().count;
-};
-
-const fetchAllTransactions = async (filters: TransactionFilters, userId: string): Promise<Transaction[]> => {
-  const q = buildBaseQuery(filters, userId);
-  const snapshot = await getDocs(q);
-  return snapshot.docs.map(mapDocToTransaction);
-};
+const getTransactionsPageUseCase = new GetTransactionsPageUseCase(transactionsRepository);
+const getTransactionsCountUseCase = new GetTransactionsCountUseCase(transactionsRepository);
+const searchTransactionsUseCase = new SearchTransactionsUseCase(transactionsRepository);
 
 export function useTransactionPagination(
   userId: string | null | undefined,
@@ -102,7 +23,7 @@ export function useTransactionPagination(
   const [hasMore, setHasMore] = useState(true);
   const [totalCount, setTotalCount] = useState(0);
   const [error, setError] = useState<string | null>(null);
-  const lastDocRef = useRef<QueryDocumentSnapshot<DocumentData> | null>(null);
+  const lastDocRef = useRef<TransactionCursor | null>(null);
   const searchCacheRef = useRef<Transaction[] | null>(null);
 
   const resetState = useCallback(() => {
@@ -132,11 +53,18 @@ export function useTransactionPagination(
         // local com cache
         if (filters.search) {
           if (!searchCacheRef.current || page === 1) {
-            const allTransactions = await fetchAllTransactions(filters, userId);
-            const searchLower = filters.search.toLowerCase();
-            searchCacheRef.current = allTransactions.filter((transaction) =>
-              transaction.description.toLowerCase().includes(searchLower)
+            const result = await searchTransactionsUseCase.execute(
+              userId,
+              filters,
+              page,
+              ITEMS_PER_PAGE
             );
+            searchCacheRef.current = result.all;
+            setTotalCount(result.total);
+            setHasMore(result.data.length < result.total);
+            setDisplayedTransactions(result.data);
+            setCurrentPage(page);
+            return;
           }
 
           const filtered = searchCacheRef.current || [];
@@ -155,12 +83,13 @@ export function useTransactionPagination(
           searchCacheRef.current = null;
         }
 
-        const { data, lastVisible } = await fetchTransactionPage(
-          filters,
+        const { data, cursor } = await getTransactionsPageUseCase.execute({
           userId,
-          append ? lastDocRef.current : null
-        );
-        lastDocRef.current = lastVisible;
+          filters,
+          cursor: append ? lastDocRef.current : null,
+          pageSize: ITEMS_PER_PAGE,
+        });
+        lastDocRef.current = cursor;
 
         if (append) {
           setDisplayedTransactions((prev) => [...prev, ...data]);
@@ -169,7 +98,7 @@ export function useTransactionPagination(
         }
 
         if (page === 1) {
-          const total = await fetchTransactionsCount(filters, userId);
+          const total = await getTransactionsCountUseCase.execute(userId, filters);
           setTotalCount(total);
           setHasMore(data.length === ITEMS_PER_PAGE && data.length < total);
         } else {
