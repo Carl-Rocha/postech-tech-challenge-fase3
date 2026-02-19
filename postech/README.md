@@ -1,49 +1,92 @@
 # Byte Bank (Expo + Firebase)
 
-Aplicativo mobile de gerenciamento financeiro com login, cadastro, extrato de transacoes, filtros e anexos.
+Aplicativo mobile de gerenciamento financeiro com autenticacao, extrato, filtros e anexos.
+
+## Tecnologias utilizadas
+
+- React Native + Expo + Expo Router
+- TypeScript
+- Firebase Auth + Firestore
+- AsyncStorage
+- Formik + Yup
+- CryptoJS (AES para criptografia de anexos sensiveis)
+
+## Arquitetura (Fase 4)
+
+- `app/` e `hooks/`: camada de apresentacao.
+- `application/usecases/`: casos de uso da aplicacao.
+- `domain/repositories/`: contratos de dominio.
+- `infrastructure/repositories/`: implementacao Firebase dos contratos.
+- State management com Context API + hooks customizados.
+- Sinal reativo de atualizacao via assinatura em tempo real do Firestore.
 
 ## Funcionalidades
 
-- Autenticacao com Firebase (login, cadastro e recuperar senha)
-- Listagem de transacoes com filtros e paginacao
-- Adicionar e editar transacoes
-- Anexos salvos como base64 no Firestore
+- Login, cadastro e recuperacao de senha com Firebase Auth.
+- Listagem paginada de transacoes com filtros.
+- Resumo financeiro (saldo, receitas e despesas).
+- Criacao e edicao de transacoes.
+- Upload de imagem/PDF como anexo.
+- Criptografia AES de anexos antes de persistir no Firestore.
 
 ## Requisitos
 
 - Node.js 18+
-- NPM 9+
-- Expo CLI (via `npx`)
-- Android Studio (para emulador) ou dispositivo fisico
+- npm 9+
+- Android Studio (emulador) ou dispositivo fisico
 
-## Dependencias
+## Instalacao
 
 ```bash
 npm install
 ```
 
-## Configuracao do Firebase
+## Configuracao
 
-A integracao com Firebase (Auth + Firestore) ja esta configurada no projeto. Se precisar ajustar as chaves:
+Arquivo de configuracao principal: `app.json`
 
-- Arquivo: `postech/app.json`
-- Secao: `expo.extra.firebase`
+- Firebase: `expo.extra.firebase`
+- Chave de criptografia de anexos: `EXPO_PUBLIC_ATTACHMENT_ENCRYPTION_KEY`
+- O repositório ja inclui `.env` para avaliacao.
 
-O bloco ja esta preenchido no arquivo do projeto.
+PowerShell (sessao atual):
 
-## Rodando o app
+```powershell
+$env:EXPO_PUBLIC_ATTACHMENT_ENCRYPTION_KEY="sua-chave-forte-aqui"
+```
+Sem essa variavel o app nao inicializa a camada de criptografia.
+Para avaliacao do professor, basta usar o `.env` versionado e rodar o projeto.
+
+## Como rodar
 
 ```bash
-npx expo start
+npm run start
 ```
 
-Android (porta fixa):
+Android:
 
 ```bash
 npm run start:android
 ```
 
+Web:
+
+```bash
+npm run web
+```
+
+## Scripts
+
+- `npm run start`: inicia o Metro/Expo.
+- `npm run start:android`: inicia no Android com porta fixa.
+- `npm run android`: build/run nativo Android.
+- `npm run ios`: build/run nativo iOS.
+- `npm run web`: execucao web.
+- `npm run server`: json-server local.
+- `npm run server:android`: json-server acessivel em rede local.
+
 ## Observacoes
 
-- As transacoes sao salvas no Firestore com `userId`.
-- Anexos sao armazenados como base64 no Firestore (sem Storage).
+- As transacoes sao segregadas por `userId`.
+- Anexos sao armazenados criptografados no Firestore (sem Firebase Storage).
+- Defina uma chave forte de criptografia para ambiente real.
